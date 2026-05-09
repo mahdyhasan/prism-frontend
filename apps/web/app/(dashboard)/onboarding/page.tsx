@@ -136,7 +136,7 @@ export default function OnboardingPage() {
                 className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand-500 focus:outline-none"
               />
               <p className="mt-1.5 text-xs text-slate-500">
-                Format: <code className="text-slate-400">properties/XXXXXXXXX</code>
+                Format: <code className="text-slate-400">properties/509732559</code>
               </p>
             </div>
             {error && <ErrorBanner message={error} />}
