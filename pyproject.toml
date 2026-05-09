@@ -1,0 +1,35 @@
+[tool.uv.workspace]
+members = ["apps/api", "apps/worker"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "D",       # docstring rules — too noisy
+  "ANN",     # annotation rules covered by mypy
+  "COM812",  # trailing comma — conflicts with Black
+  "ISC001",  # implicit string concat — conflicts with Black
+  "EM101",   # exception message string literal
+  "EM102",   # exception message f-string
+  "TRY003",  # long messages in raises
+  "FBT",     # boolean positional args
+  "S101",    # assert usage
+  "PTH",     # pathlib preference
+  "RUF012",  # mutable class var annotation
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["apps/api/tests"]

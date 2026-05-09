@@ -1,0 +1,12 @@
+[project]
+name = "prism-worker"
+version = "0.1.0"
+description = "PRISM Celery worker"
+requires-python = ">=3.12"
+dependencies = [
+  "prism-api",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

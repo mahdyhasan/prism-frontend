@@ -1,0 +1,14 @@
+{
+  "name": "@prism/shared-types",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "generate": "openapi-typescript http://localhost:8000/api/openapi.json -o index.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.4.4",
+    "typescript": "^5.7.2"
+  }
+}

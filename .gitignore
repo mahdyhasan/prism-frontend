@@ -1,0 +1,65 @@
+# ── Backend — stays on VPS, not in the public frontend repo ──────────────────
+apps/api/
+infra/
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+.uv/
+*.so
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ── Node ─────────────────────────────────────────────────────────────────────
+node_modules/
+.next/
+out/
+.pnpm-store/
+
+# ── Secrets ───────────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+!.env.example
+*.pem
+service-account*.json
+
+# ── Claude / AI tools ────────────────────────────────────────────────────────
+CLAUDE.md
+.claude/
+.gitignore.frontend
+
+# ── Docs (keep only README files) ────────────────────────────────────────────
+*.md
+!README.md
+!apps/web/README.md
+!packages/shared-types/README.md
+
+# ── Docker ───────────────────────────────────────────────────────────────────
+.docker/
+
+# ── Editors ──────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Misc ─────────────────────────────────────────────────────────────────────
+*.log
+*.sqlite3
