@@ -67,7 +67,8 @@ type SortPreset =
   | "worst_bounce"
   | "worst_exit"
   | "hidden_gems"
-  | "lowest_health";
+  | "lowest_health"
+  | "most_frustrated";
 
 const SORT_PRESETS: Record<
   SortPreset,
@@ -114,6 +115,13 @@ const SORT_PRESETS: Record<
     sort_desc: false,
     min_sessions: 50,
     tip: "Worst composite health score, sessions floor 50",
+  },
+  most_frustrated: {
+    label: "Most frustrated",
+    sort_by: "frustration_score",
+    sort_desc: true,
+    min_sessions: 50,
+    tip: "Highest Clarity frustration score (rage clicks, dead clicks, quick backs) — requires Clarity API token",
   },
 };
 
@@ -343,6 +351,9 @@ function PagesTable({
   const showRevenue = rows.some((r) => r.revenue > 0);
   const showGSC = rows.some((r) => r.impressions > 0 || r.clicks > 0);
   const showClarity = !!clarityProjectId;
+  // Show the frustration column only when Clarity data has been pulled
+  // (i.e. at least one row has a non-null frustration score)
+  const hasFrustrationData = rows.some((r) => r.frustration_score != null);
 
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900">
@@ -382,6 +393,11 @@ function PagesTable({
                 </Th>
               </>
             )}
+            {hasFrustrationData && (
+              <Th align="right" sortKey="frustration_score" sortBy={sortBy} sortDesc={sortDesc} onSort={onSort}>
+                Frustration
+              </Th>
+            )}
             <Th align="right" sortKey="health_score" sortBy={sortBy} sortDesc={sortDesc} onSort={onSort}>
               Health
             </Th>
@@ -414,6 +430,14 @@ function PagesTable({
                   <Td>{row.impressions > 0 ? formatNumber(row.impressions) : <Dash />}</Td>
                   <Td>{row.avg_position > 0 ? row.avg_position.toFixed(1) : <Dash />}</Td>
                 </>
+              )}
+              {hasFrustrationData && (
+                <td className="px-3 py-2.5 text-right">
+                  <FrustrationBadge
+                    score={row.frustration_score}
+                    scrollDepth={row.scroll_depth_avg}
+                  />
+                </td>
               )}
               <td className="px-3 py-2.5 text-right">
                 <HealthBadge score={row.health_score} />
@@ -523,13 +547,53 @@ function HealthBadge({ score }: { score: number | null }) {
         : "border-slate-700 bg-slate-800/60 text-slate-300";
   return (
     <span
-      title="Composite of conversion rate (40%), engagement rate (30%), and inverse bounce rate (30%)"
+      title="Composite of conversion rate, engagement rate, inverse bounce rate (and inverse frustration when Clarity data is present)"
       className={clsx(
         "inline-flex w-12 items-center justify-center rounded-md border px-2 py-0.5 text-xs font-semibold tabular-nums",
         color,
       )}
     >
       {pct}
+    </span>
+  );
+}
+
+function FrustrationBadge({
+  score,
+  scrollDepth,
+}: {
+  score: number | null;
+  scrollDepth: number | null;
+}) {
+  if (score == null) {
+    return <span className="text-slate-700">—</span>;
+  }
+  const pct = Math.round(score * 100);
+  const scrollPct = scrollDepth != null ? Math.round(scrollDepth * 100) : null;
+  const color =
+    score >= 0.6
+      ? "border-red-700/50 bg-red-950/40 text-red-400"
+      : score >= 0.3
+        ? "border-amber-700/50 bg-amber-950/40 text-amber-400"
+        : "border-slate-700 bg-slate-800/60 text-slate-400";
+
+  const tooltip = [
+    `Frustration score: ${pct}%`,
+    scrollPct != null ? `Avg scroll depth: ${scrollPct}%` : null,
+    "(dead clicks + 2x rage clicks + quick backs) / sessions, capped at 300%",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <span
+      title={tooltip}
+      className={clsx(
+        "inline-flex w-12 items-center justify-center rounded-md border px-2 py-0.5 text-xs font-semibold tabular-nums",
+        color,
+      )}
+    >
+      {pct}%
     </span>
   );
 }

@@ -147,6 +147,7 @@ export interface PropertyResponse {
   created_at: string;
   primary_conversion_events?: string[] | null;
   clarity_project_id?: string | null;
+  has_clarity_api_token?: boolean;
 }
 
 export interface AvailableEvent {
@@ -302,6 +303,11 @@ export const propertiesApi = {
   setClarityProjectId: (id: number, clarity_project_id: string | null) =>
     api.put<PropertyResponse>(`/api/v1/properties/${id}/clarity-project-id`, {
       clarity_project_id,
+    }),
+
+  setClarityApiToken: (id: number, api_token: string | null) =>
+    api.put<PropertyResponse>(`/api/v1/properties/${id}/clarity-api-token`, {
+      api_token,
     }),
 };
 
@@ -610,6 +616,9 @@ export interface PageRow {
   impressions: number;
   ctr: number;
   avg_position: number;
+  // Microsoft Clarity (null when no data available yet)
+  frustration_score: number | null;
+  scroll_depth_avg: number | null;
   health_score: number | null;
 }
 
@@ -633,7 +642,9 @@ export type PageSortKey =
   | "clicks"
   | "impressions"
   | "position"
-  | "health_score";
+  | "health_score"
+  | "frustration_score"
+  | "scroll_depth";
 
 export const pagesApi = {
   list: (

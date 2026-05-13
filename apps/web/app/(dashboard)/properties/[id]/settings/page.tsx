@@ -1427,12 +1427,18 @@ function ClarityCard({
   const [value, setValue] = useState(initial);
   const [saved, setSaved] = useState(false);
 
+  // API token section
+  const [tokenValue, setTokenValue] = useState("");
+  const [tokenSaved, setTokenSaved] = useState(false);
+  const hasToken = !!property.has_clarity_api_token;
+
   useEffect(() => {
     setValue(property.clarity_project_id ?? "");
   }, [property.clarity_project_id]);
 
   const linked = !!property.clarity_project_id;
   const dirty = value.trim().toLowerCase() !== initial.toLowerCase();
+  const tokenDirty = tokenValue.trim().length > 0;
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -1449,6 +1455,25 @@ function ClarityCard({
     onSuccess: () => {
       onSaved();
       setValue("");
+      setTokenValue("");
+    },
+  });
+
+  const saveTokenMutation = useMutation({
+    mutationFn: () =>
+      propertiesApi.setClarityApiToken(propertyId, tokenValue.trim() || null),
+    onSuccess: () => {
+      onSaved();
+      setTokenValue("");
+      setTokenSaved(true);
+      setTimeout(() => setTokenSaved(false), 2_500);
+    },
+  });
+
+  const clearTokenMutation = useMutation({
+    mutationFn: () => propertiesApi.setClarityApiToken(propertyId, null),
+    onSuccess: () => {
+      onSaved();
     },
   });
 
@@ -1467,7 +1492,7 @@ function ClarityCard({
           <div>
             <h2 className="text-sm font-semibold text-white">Microsoft Clarity</h2>
             <p className="text-xs text-slate-500">
-              Heatmaps, session recordings, rage clicks
+              Heatmaps, session recordings, rage clicks, frustration scores
             </p>
           </div>
         </div>
@@ -1494,6 +1519,7 @@ function ClarityCard({
         </div>
       )}
 
+      {/* ── Project ID row ── */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -1543,6 +1569,89 @@ function ClarityCard({
         <p className="mt-2 text-xs text-red-400">
           {(saveMutation.error as Error).message}
         </p>
+      )}
+
+      {/* ── API token row (only shown when project ID is linked) ── */}
+      {linked && (
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <KeyRound size={13} className="text-slate-500" />
+              <span className="text-xs font-medium text-slate-400">
+                Data Export API token
+              </span>
+              {hasToken && (
+                <span className="rounded-full bg-emerald-900/40 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
+                  Configured
+                </span>
+              )}
+            </div>
+            {hasToken && (
+              <button
+                type="button"
+                onClick={() => clearTokenMutation.mutate()}
+                disabled={clearTokenMutation.isPending}
+                className="text-xs text-red-500 hover:text-red-400 transition disabled:opacity-50"
+              >
+                {clearTokenMutation.isPending ? "Removing..." : "Remove token"}
+              </button>
+            )}
+          </div>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (tokenDirty) saveTokenMutation.mutate();
+            }}
+            className="flex gap-2"
+          >
+            <input
+              type="password"
+              value={tokenValue}
+              onChange={(e) => setTokenValue(e.target.value)}
+              placeholder={
+                hasToken
+                  ? "Enter new token to replace..."
+                  : "Paste your Clarity Data Export API token..."
+              }
+              className="flex-1 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 font-mono text-sm text-white placeholder-slate-600 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/30"
+            />
+            <button
+              type="submit"
+              disabled={!tokenDirty || saveTokenMutation.isPending}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saveTokenMutation.isPending ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : tokenSaved ? (
+                <Check size={13} />
+              ) : (
+                <Save size={13} />
+              )}
+              {tokenSaved ? "Saved" : hasToken ? "Replace" : "Save token"}
+            </button>
+          </form>
+
+          {saveTokenMutation.isError && (
+            <p className="text-xs text-red-400">
+              {(saveTokenMutation.error as Error).message}
+            </p>
+          )}
+
+          <p className="text-xs text-slate-600">
+            Get a Data Export API token from{" "}
+            <a
+              href="https://clarity.microsoft.com/account"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand-500 hover:text-brand-400"
+            >
+              Clarity Account Settings
+            </a>
+            . Once added, PRISM pulls per-page frustration metrics nightly and
+            surfaces them in the Pages report.
+          </p>
+        </div>
       )}
 
       <p className="mt-3 text-xs text-slate-600">
