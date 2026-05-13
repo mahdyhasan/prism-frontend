@@ -35,6 +35,7 @@ import {
 } from "@/lib/format";
 import {
   pagesApi,
+  type DeviceCategory,
   type PageRow,
   type PageSortKey,
 } from "@/lib/api-client";
@@ -64,6 +65,7 @@ type SortPreset =
   | "most_traffic"
   | "best_converters"
   | "worst_bounce"
+  | "worst_exit"
   | "hidden_gems"
   | "lowest_health";
 
@@ -92,6 +94,13 @@ const SORT_PRESETS: Record<
     min_sessions: 50,
     tip: "Highest bounce rate, sessions floor 50",
   },
+  worst_exit: {
+    label: "Worst exit",
+    sort_by: "exit_rate",
+    sort_desc: true,
+    min_sessions: 50,
+    tip: "Pages users leave from most often — exit rate descending, sessions floor 50",
+  },
   hidden_gems: {
     label: "Hidden gems",
     sort_by: "impressions",
@@ -118,6 +127,7 @@ export default function PagesPage() {
   const [sortBy, setSortBy] = useState<PageSortKey>("sessions");
   const [sortDesc, setSortDesc] = useState(true);
   const [minSessions, setMinSessions] = useState(1);
+  const [device, setDevice] = useState<DeviceCategory | null>(null);
 
   const { data: property } = useProperty(propertyId);
   const ga4Linked = property ? isGA4Linked(property) : true;
@@ -150,7 +160,7 @@ export default function PagesPage() {
 
   const { start, end } = useMemo(() => rangeFor(preset), [preset]);
 
-  const queryKey = ["pages", propertyId, start, end, minSessions, sortBy, sortDesc];
+  const queryKey = ["pages", propertyId, start, end, minSessions, sortBy, sortDesc, device];
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey,
@@ -162,6 +172,7 @@ export default function PagesPage() {
         sort_by: sortBy,
         sort_desc: sortDesc,
         limit: 100,
+        device: device ?? undefined,
       }),
     enabled: !!propertyId && ga4Linked,
     staleTime: 60_000,
@@ -198,6 +209,42 @@ export default function PagesPage() {
 
           {ga4Linked && (
             <>
+              {/* Device filter chips */}
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <span className="text-xs uppercase tracking-widest text-slate-600 mr-1">
+                  Device
+                </span>
+                {([null, "mobile", "desktop", "tablet"] as const).map((d) => {
+                  const active = device === d;
+                  const label = d === null ? "All" : d[0].toUpperCase() + d.slice(1);
+                  return (
+                    <button
+                      key={String(d)}
+                      type="button"
+                      onClick={() => setDevice(d)}
+                      title={
+                        d === null
+                          ? "All devices (uses GA4 + GSC join)"
+                          : `Only ${d} traffic — GSC columns hidden (no device dim in GSC)`
+                      }
+                      className={clsx(
+                        "rounded-full border px-3 py-1 text-xs font-semibold transition",
+                        active
+                          ? "border-amber-500/60 bg-amber-500/10 text-amber-300"
+                          : "border-slate-800 text-slate-400 hover:border-slate-700 hover:text-white",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+                {device !== null && (
+                  <span className="text-xs text-slate-600">
+                    (GSC data hidden when device filter is on)
+                  </span>
+                )}
+              </div>
+
               {/* Sort preset chips */}
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 {(Object.keys(SORT_PRESETS) as SortPreset[]).map((p) => {
@@ -315,6 +362,9 @@ function PagesTable({
             <Th align="right" sortKey="bounce_rate" sortBy={sortBy} sortDesc={sortDesc} onSort={onSort}>
               Bounce
             </Th>
+            <Th align="right" sortKey="exit_rate" sortBy={sortBy} sortDesc={sortDesc} onSort={onSort}>
+              Exit rate
+            </Th>
             <Th align="right" sortKey="avg_duration" sortBy={sortBy} sortDesc={sortDesc} onSort={onSort}>
               Avg duration
             </Th>
@@ -353,6 +403,7 @@ function PagesTable({
               <Td>{row.conversion_rate == null ? <Dash /> : formatPercent(row.conversion_rate)}</Td>
               <Td>{row.engagement_rate == null ? <Dash /> : formatPercent(row.engagement_rate)}</Td>
               <Td>{formatPercent(row.bounce_rate)}</Td>
+              <Td>{row.exit_rate == null ? <Dash /> : formatPercent(row.exit_rate)}</Td>
               <Td>{formatDuration(row.avg_session_duration)}</Td>
               {showRevenue && (
                 <Td>{row.revenue > 0 ? formatCurrency(row.revenue, currency) : <Dash />}</Td>

@@ -604,6 +604,8 @@ export interface PageRow {
   engagement_rate: number | null;
   conversion_rate: number | null;
   avg_session_duration: number;
+  exits: number;
+  exit_rate: number | null;
   clicks: number;
   impressions: number;
   ctr: number;
@@ -611,11 +613,14 @@ export interface PageRow {
   health_score: number | null;
 }
 
+export type DeviceCategory = "mobile" | "desktop" | "tablet";
+
 export interface PagePerformanceResponse {
   start_date: string;
   end_date: string;
   rows: PageRow[];
   total_rows: number;
+  device: DeviceCategory | null;
 }
 
 export type PageSortKey =
@@ -624,6 +629,7 @@ export type PageSortKey =
   | "engagement_rate"
   | "bounce_rate"
   | "avg_duration"
+  | "exit_rate"
   | "clicks"
   | "impressions"
   | "position"
@@ -639,6 +645,7 @@ export const pagesApi = {
       sort_by?: PageSortKey;
       sort_desc?: boolean;
       limit?: number;
+      device?: DeviceCategory;
     } = {},
   ) => {
     const qs = buildQS(params);
