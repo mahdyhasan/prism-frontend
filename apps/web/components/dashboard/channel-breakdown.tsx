@@ -131,6 +131,9 @@ export function ChannelBreakdown({
                   <th className="pb-2 pl-4 text-right text-xs font-semibold uppercase tracking-widest text-slate-500">
                     Conv.
                   </th>
+                  <th className="pb-2 pl-4 text-right text-xs font-semibold uppercase tracking-widest text-slate-500">
+                    Conv. rate
+                  </th>
                   {showRevenue && (
                     <th className="pb-2 pl-4 text-right text-xs font-semibold uppercase tracking-widest text-slate-500">
                       Revenue
@@ -157,6 +160,13 @@ export function ChannelBreakdown({
                     </td>
                     <td className="pl-4 py-2.5 text-right tabular-nums text-slate-300">
                       {formatNumber(row.conversions)}
+                    </td>
+                    <td className="pl-4 py-2.5 text-right tabular-nums text-slate-400">
+                      {row.conversion_rate == null ? (
+                        <span className="text-slate-700">—</span>
+                      ) : (
+                        formatPercent(row.conversion_rate)
+                      )}
                     </td>
                     {showRevenue && (
                       <td className="pl-4 py-2.5 text-right tabular-nums text-slate-300">

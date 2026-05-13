@@ -267,6 +267,40 @@ export default function OverviewPage() {
                 </div>
               </div>
 
+              {/* Primary-event conversion rates (per event configured in Settings) */}
+              {data.kpis.primary_event_conversions.length > 0 && (
+                <div className="mb-6">
+                  <div className="mb-2 flex items-baseline justify-between">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Conversion rate
+                    </h3>
+                    <Link
+                      href={`/properties/${propertyId}/settings` as Route}
+                      className="text-xs text-slate-600 hover:text-slate-400 transition"
+                    >
+                      Configure →
+                    </Link>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                    {data.kpis.primary_event_conversions.map((pec) => (
+                      <KPICard
+                        key={pec.event_name}
+                        label={pec.event_name}
+                        data={{
+                          value: pec.rate_per_session,
+                          previous_value: null,
+                          delta_percent: pec.delta_rate_percent,
+                        }}
+                        format="percent"
+                        directionOfGood="up"
+                        showDelta={showDelta && pec.delta_rate_percent !== null}
+                        currency={currency}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {isEmpty ? (
                 <EmptyState onRefresh={() => void refetch()} refreshing={isFetching} />
               ) : (
@@ -309,6 +343,13 @@ export default function OverviewPage() {
                           label: "Conv.",
                           align: "right",
                           render: (v) => formatNumber(Number(v)),
+                        },
+                        {
+                          key: "conversion_rate",
+                          label: "Conv. rate",
+                          align: "right",
+                          render: (v) =>
+                            v == null ? <span className="text-slate-700">—</span> : formatPercent(Number(v)),
                         },
                         {
                           key: "bounce_rate",
@@ -354,6 +395,13 @@ export default function OverviewPage() {
                           label: "Conv.",
                           align: "right",
                           render: (v) => formatNumber(Number(v)),
+                        },
+                        {
+                          key: "conversion_rate",
+                          label: "Conv. rate",
+                          align: "right",
+                          render: (v) =>
+                            v == null ? <span className="text-slate-700">—</span> : formatPercent(Number(v)),
                         },
                       ]}
                     />

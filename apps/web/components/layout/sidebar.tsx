@@ -14,11 +14,20 @@ import {
   Newspaper,
   Pin,
   Table2,
+  FileText,
+  Activity,
+  ExternalLink,
 } from "lucide-react";
 import { PropertySwitcher } from "./property-switcher";
+import { useProperty } from "@/hooks/use-properties";
+import {
+  clarityDashboardUrl,
+  isClarityLinked,
+} from "@/lib/property-features";
 
 const analyticsNavItems = [
   { label: "Overview", href: "overview", icon: LayoutDashboard },
+  { label: "Pages", href: "pages", icon: FileText },
   { label: "Search", href: "search", icon: Search },
   { label: "Insights", href: "insights", icon: Lightbulb },
   { label: "Reports", href: "reports", icon: BarChart2 },
@@ -73,6 +82,9 @@ const aiNavItems: AINavItem[] = [
 export function Sidebar({ propertyId }: { propertyId: number }) {
   const pathname = usePathname();
   const base = `/properties/${propertyId}`;
+  const { data: property } = useProperty(propertyId);
+  const clarityProjectId =
+    property && isClarityLinked(property) ? property.clarity_project_id! : null;
 
   return (
     <aside className="flex h-full w-56 flex-col border-r border-slate-800 bg-slate-950">
@@ -142,6 +154,19 @@ export function Sidebar({ propertyId }: { propertyId: number }) {
 
       {/* Bottom */}
       <div className="border-t border-slate-800 p-3">
+        {clarityProjectId && (
+          <a
+            href={clarityDashboardUrl(clarityProjectId)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mb-0.5 flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:text-white transition"
+            title="Open Microsoft Clarity"
+          >
+            <Activity size={16} />
+            Clarity
+            <ExternalLink size={11} className="ml-auto opacity-60" />
+          </a>
+        )}
         <Link
           href={`/properties/${propertyId}/settings` as Route}
           className={clsx(

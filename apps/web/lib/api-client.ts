@@ -145,6 +145,14 @@ export interface PropertyResponse {
   currency: string;
   status: string;
   created_at: string;
+  primary_conversion_events?: string[] | null;
+  clarity_project_id?: string | null;
+}
+
+export interface AvailableEvent {
+  event_name: string;
+  total_count: number;
+  is_ga4_conversion: boolean;
 }
 
 export interface OverviewResponse {
@@ -166,6 +174,14 @@ export interface KPIValue {
   delta_percent: number | null;
 }
 
+export interface PrimaryEventConversion {
+  event_name: string;
+  count: number;
+  rate_per_session: number;
+  delta_count_percent: number | null;
+  delta_rate_percent: number | null;
+}
+
 export interface OverviewKPIs {
   sessions: KPIValue;
   users: KPIValue;
@@ -174,6 +190,7 @@ export interface OverviewKPIs {
   bounce_rate: KPIValue;
   conversions: KPIValue;
   total_revenue: KPIValue;
+  primary_event_conversions: PrimaryEventConversion[];
 }
 
 export interface DailyPoint {
@@ -187,6 +204,7 @@ export interface LandingPageRow {
   sessions: number;
   users: number;
   conversions: number;
+  conversion_rate: number | null;
   bounce_rate: number;
 }
 
@@ -196,6 +214,7 @@ export interface TrafficSourceRow {
   sessions: number;
   users: number;
   conversions: number;
+  conversion_rate: number | null;
 }
 
 export interface DeviceRow {
@@ -203,6 +222,7 @@ export interface DeviceRow {
   sessions: number;
   users: number;
   conversions: number;
+  conversion_rate: number | null;
 }
 
 export const authApi = {
@@ -236,6 +256,9 @@ export const authApi = {
   }) =>
     api.post<GoogleDiscoverResponse>("/api/v1/auth/google/discover", payload),
 
+  discoverMine: () =>
+    api.get<GoogleDiscoverResponse>("/api/v1/auth/google/discover-mine"),
+
   me: () =>
     api.get<{ id: number; email: string; name: string; role: string; has_google_linked: boolean }>(
       "/api/v1/auth/me",
@@ -267,6 +290,19 @@ export const propertiesApi = {
     id: number,
     body: { llm_provider: string; llm_model: string; llm_api_key?: string },
   ) => api.put<LLMConfigResponse>(`/api/v1/properties/${id}/llm-config`, body),
+
+  getAvailableEvents: (id: number) =>
+    api.get<AvailableEvent[]>(`/api/v1/properties/${id}/available-events`),
+
+  setPrimaryConversionEvents: (id: number, event_names: string[]) =>
+    api.put<PropertyResponse>(`/api/v1/properties/${id}/primary-conversion-events`, {
+      event_names,
+    }),
+
+  setClarityProjectId: (id: number, clarity_project_id: string | null) =>
+    api.put<PropertyResponse>(`/api/v1/properties/${id}/clarity-project-id`, {
+      clarity_project_id,
+    }),
 };
 
 export const syncApi = {
@@ -505,6 +541,7 @@ export interface ChannelBreakdownItem {
   sessions: number;
   users: number;
   conversions: number;
+  conversion_rate: number | null;
   revenue: number;
   /** 0..1 share of total sessions */
   share: number;
@@ -553,6 +590,64 @@ interface DateRangeParams {
   start: string;
   end: string;
 }
+
+// ── Page Performance (Phase B) ────────────────────────────────────────────────
+
+export interface PageRow {
+  page: string;
+  sessions: number;
+  users: number;
+  engaged_sessions: number;
+  conversions: number;
+  revenue: number;
+  bounce_rate: number;
+  engagement_rate: number | null;
+  conversion_rate: number | null;
+  avg_session_duration: number;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  avg_position: number;
+  health_score: number | null;
+}
+
+export interface PagePerformanceResponse {
+  start_date: string;
+  end_date: string;
+  rows: PageRow[];
+  total_rows: number;
+}
+
+export type PageSortKey =
+  | "sessions"
+  | "conv_rate"
+  | "engagement_rate"
+  | "bounce_rate"
+  | "avg_duration"
+  | "clicks"
+  | "impressions"
+  | "position"
+  | "health_score";
+
+export const pagesApi = {
+  list: (
+    propertyId: number,
+    params: {
+      start?: string;
+      end?: string;
+      min_sessions?: number;
+      sort_by?: PageSortKey;
+      sort_desc?: boolean;
+      limit?: number;
+    } = {},
+  ) => {
+    const qs = buildQS(params);
+    const suffix = qs ? `?${qs}` : "";
+    return api.get<PagePerformanceResponse>(
+      `/api/v1/properties/${propertyId}/pages${suffix}`,
+    );
+  },
+};
 
 export const overviewWidgetsApi = {
   getChannels: (propertyId: number, params: DateRangeParams) => {

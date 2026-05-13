@@ -7,6 +7,7 @@ import { signIn } from "next-auth/react";
 import { clsx } from "clsx";
 import {
   AlertCircle,
+  Activity,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -15,8 +16,11 @@ import {
   Loader2,
   RefreshCw,
   Save,
+  Search,
+  Target,
   Unlink,
   WifiOff,
+  X,
 } from "lucide-react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
@@ -24,6 +28,8 @@ import {
   authApi,
   propertiesApi,
   syncApi,
+  type GA4PropertyOption,
+  type GSCSiteOption,
   type IntegrationSyncStatus,
   type PropertyResponse,
 } from "@/lib/api-client";
@@ -93,6 +99,18 @@ export default function SettingsPage() {
                   syncStatus={syncStatus?.gsc ?? null}
                   onSaved={invalidateProperty}
                   onSyncDone={handleSyncDone}
+                />
+
+                <ConversionEventsCard
+                  propertyId={propertyId}
+                  property={property}
+                  onSaved={invalidateProperty}
+                />
+
+                <ClarityCard
+                  propertyId={propertyId}
+                  property={property}
+                  onSaved={invalidateProperty}
                 />
 
                 <LLMConfigCard propertyId={propertyId} />
@@ -295,6 +313,7 @@ function GA4Card({
 }) {
   const [inputValue, setInputValue] = useState("");
   const [showLinkForm, setShowLinkForm] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
 
   const linked = !!property.ga4_property_id;
   const displayId = property.ga4_property_id?.replace("properties/", "") ?? "";
@@ -304,6 +323,7 @@ function GA4Card({
     onSuccess: () => {
       onSaved();
       setShowLinkForm(false);
+      setShowPicker(false);
       setInputValue("");
     },
   });
@@ -363,7 +383,7 @@ function GA4Card({
             />
             <div className="flex-1" />
             <button
-              onClick={() => setShowLinkForm(true)}
+              onClick={() => setShowPicker(true)}
               className="text-xs text-slate-600 hover:text-slate-400 transition"
             >
               Change
@@ -390,15 +410,33 @@ function GA4Card({
         </>
       )}
 
-      {/* Link / re-link form */}
-      {(!linked || showLinkForm) && (
+      {/* Disconnected: primary CTA is the Google picker; manual ID is a fallback */}
+      {!linked && !showLinkForm && (
         <>
-          {showLinkForm && (
-            <p className="mb-3 text-xs text-slate-500">
-              Enter a new Property ID to replace the current one.
+          <button
+            onClick={() => setShowPicker(true)}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
+          >
+            <GoogleIcon size={14} /> Choose a GA4 property
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowLinkForm(true)}
+            className="mt-2 w-full text-center text-xs text-slate-600 hover:text-slate-400 transition"
+          >
+            Or enter Property ID manually
+          </button>
+          {linkMutation.isError && (
+            <p className="mt-2 text-xs text-red-400">
+              {(linkMutation.error as Error).message}
             </p>
           )}
+        </>
+      )}
 
+      {/* Manual entry form (fallback) */}
+      {(!linked && showLinkForm) && (
+        <>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -411,7 +449,7 @@ function GA4Card({
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               placeholder="123456789  (numeric Property ID)"
-              autoFocus={showLinkForm}
+              autoFocus
               className="flex-1 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/30"
             />
             <button
@@ -424,20 +462,18 @@ function GA4Card({
               ) : (
                 <Save size={13} />
               )}
-              {linked ? "Update" : "Link"}
+              Link
             </button>
-            {showLinkForm && (
-              <button
-                type="button"
-                onClick={() => {
-                  setShowLinkForm(false);
-                  setInputValue("");
-                }}
-                className="rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-500 hover:text-slate-300 transition"
-              >
-                Cancel
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                setShowLinkForm(false);
+                setInputValue("");
+              }}
+              className="rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-500 hover:text-slate-300 transition"
+            >
+              Cancel
+            </button>
           </form>
 
           {linkMutation.isError && (
@@ -445,18 +481,27 @@ function GA4Card({
               {(linkMutation.error as Error).message}
             </p>
           )}
-          {linkMutation.isSuccess && !showLinkForm && (
-            <p className="mt-2 text-xs text-green-400">GA4 linked. Run a sync to pull data.</p>
-          )}
 
-          {!showLinkForm && (
-            <p className="mt-3 text-xs text-slate-600">
-              Find your numeric Property ID in GA4 → Admin → Property Settings.
-              Enter digits only (e.g.{" "}
-              <span className="font-mono text-slate-500">123456789</span>).
-            </p>
-          )}
+          <p className="mt-3 text-xs text-slate-600">
+            Find your numeric Property ID in GA4 → Admin → Property Settings.
+            Enter digits only (e.g.{" "}
+            <span className="font-mono text-slate-500">123456789</span>).
+          </p>
         </>
+      )}
+
+      {/* Picker modal — used both for initial connect and for "Change" */}
+      {showPicker && (
+        <GooglePickerModal
+          kind="ga4"
+          currentValue={property.ga4_property_id ?? null}
+          onClose={() => setShowPicker(false)}
+          onSelect={(value) => linkMutation.mutate(value)}
+          submitting={linkMutation.isPending}
+          submitError={
+            linkMutation.isError ? (linkMutation.error as Error).message : null
+          }
+        />
       )}
     </div>
   );
@@ -479,6 +524,7 @@ function GSCCard({
 }) {
   const [inputValue, setInputValue] = useState("");
   const [showLinkForm, setShowLinkForm] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
 
   const linked = !!property.gsc_site_url;
 
@@ -487,6 +533,7 @@ function GSCCard({
     onSuccess: () => {
       onSaved();
       setShowLinkForm(false);
+      setShowPicker(false);
       setInputValue("");
     },
   });
@@ -538,7 +585,7 @@ function GSCCard({
             />
             <div className="flex-1" />
             <button
-              onClick={() => setShowLinkForm(true)}
+              onClick={() => setShowPicker(true)}
               className="text-xs text-slate-600 hover:text-slate-400 transition"
             >
               Change
@@ -565,15 +612,33 @@ function GSCCard({
         </>
       )}
 
-      {/* Link / re-link form */}
-      {(!linked || showLinkForm) && (
+      {/* Disconnected: primary CTA is the Google picker; manual URL is a fallback */}
+      {!linked && !showLinkForm && (
         <>
-          {showLinkForm && (
-            <p className="mb-3 text-xs text-slate-500">
-              Enter a new site URL to replace the current one.
+          <button
+            onClick={() => setShowPicker(true)}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
+          >
+            <GoogleIcon size={14} /> Choose a Search Console site
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowLinkForm(true)}
+            className="mt-2 w-full text-center text-xs text-slate-600 hover:text-slate-400 transition"
+          >
+            Or enter site URL manually
+          </button>
+          {linkMutation.isError && (
+            <p className="mt-2 text-xs text-red-400">
+              {(linkMutation.error as Error).message}
             </p>
           )}
+        </>
+      )}
 
+      {/* Manual entry form (fallback) */}
+      {(!linked && showLinkForm) && (
+        <>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -586,7 +651,7 @@ function GSCCard({
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               placeholder="sc-domain:example.com"
-              autoFocus={showLinkForm}
+              autoFocus
               className="flex-1 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/30"
             />
             <button
@@ -599,20 +664,18 @@ function GSCCard({
               ) : (
                 <Save size={13} />
               )}
-              {linked ? "Update" : "Link"}
+              Link
             </button>
-            {showLinkForm && (
-              <button
-                type="button"
-                onClick={() => {
-                  setShowLinkForm(false);
-                  setInputValue("");
-                }}
-                className="rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-500 hover:text-slate-300 transition"
-              >
-                Cancel
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                setShowLinkForm(false);
+                setInputValue("");
+              }}
+              className="rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-500 hover:text-slate-300 transition"
+            >
+              Cancel
+            </button>
           </form>
 
           {linkMutation.isError && (
@@ -620,27 +683,272 @@ function GSCCard({
               {(linkMutation.error as Error).message}
             </p>
           )}
-          {linkMutation.isSuccess && !showLinkForm && (
-            <p className="mt-2 text-xs text-green-400">GSC linked. Run a sync to pull data.</p>
-          )}
 
-          {!showLinkForm && (
-            <div className="mt-3 space-y-1 text-xs text-slate-600">
-              <p>
-                Use the{" "}
-                <span className="font-mono text-slate-500">sc-domain:</span>{" "}
-                format for domain properties:{" "}
-                <span className="font-mono text-slate-500">sc-domain:example.com</span>
-              </p>
-              <p>
-                Or full URL for URL-prefix properties:{" "}
-                <span className="font-mono text-slate-500">https://example.com/</span>{" "}
-                (include trailing slash).
-              </p>
-            </div>
-          )}
+          <div className="mt-3 space-y-1 text-xs text-slate-600">
+            <p>
+              Use the{" "}
+              <span className="font-mono text-slate-500">sc-domain:</span>{" "}
+              format for domain properties:{" "}
+              <span className="font-mono text-slate-500">sc-domain:example.com</span>
+            </p>
+            <p>
+              Or full URL for URL-prefix properties:{" "}
+              <span className="font-mono text-slate-500">https://example.com/</span>{" "}
+              (include trailing slash).
+            </p>
+          </div>
         </>
       )}
+
+      {showPicker && (
+        <GooglePickerModal
+          kind="gsc"
+          currentValue={property.gsc_site_url ?? null}
+          onClose={() => setShowPicker(false)}
+          onSelect={(value) => linkMutation.mutate(value)}
+          submitting={linkMutation.isPending}
+          submitError={
+            linkMutation.isError ? (linkMutation.error as Error).message : null
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Google picker modal (shared by GA4 + GSC cards) ───────────────────────────
+//
+// Mirrors the Clarity / Hotjar UX: searchable list of the user's accessible
+// GA4 properties or GSC sites pulled directly from Google with their stored
+// refresh token. No typing of IDs.
+
+function GooglePickerModal({
+  kind,
+  currentValue,
+  onClose,
+  onSelect,
+  submitting,
+  submitError,
+}: {
+  kind: "ga4" | "gsc";
+  currentValue: string | null;
+  onClose: () => void;
+  onSelect: (value: string) => void;
+  submitting: boolean;
+  submitError: string | null;
+}) {
+  const [q, setQ] = useState("");
+
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+    queryKey: ["google-discovery"],
+    queryFn: () => authApi.discoverMine(),
+    staleTime: 5 * 60_000,
+  });
+
+  // Close on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !submitting) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, submitting]);
+
+  const items: Array<{ value: string; primary: string; secondary?: string }> =
+    !data
+      ? []
+      : kind === "ga4"
+        ? data.ga4_properties.map((p: GA4PropertyOption) => ({
+            value: p.property_id,
+            primary: p.display_name,
+            secondary: `${p.account_name} · ${p.property_id}`,
+          }))
+        : data.gsc_sites.map((s: GSCSiteOption) => ({
+            value: s.site_url,
+            primary: s.site_url,
+            secondary: s.permission_level,
+          }));
+
+  const needle = q.trim().toLowerCase();
+  const filtered = needle
+    ? items.filter(
+        (it) =>
+          it.primary.toLowerCase().includes(needle) ||
+          (it.secondary?.toLowerCase().includes(needle) ?? false),
+      )
+    : items;
+
+  const title =
+    kind === "ga4" ? "Choose a GA4 property" : "Choose a Search Console site";
+  const subtitle =
+    kind === "ga4"
+      ? "These are the GA4 properties your Google account has access to."
+      : "These are the verified Search Console sites your Google account has access to.";
+
+  // Highlight what's currently linked so the user can spot it
+  const currentNorm =
+    kind === "ga4" ? currentValue?.replace("properties/", "") ?? null : currentValue;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={() => !submitting && onClose()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-3">
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold text-white">{title}</h3>
+            <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
+          </div>
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-shrink-0 rounded-lg p-1.5 text-slate-500 hover:bg-slate-800 hover:text-white transition disabled:opacity-50"
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="px-6 pb-3">
+          <div className="relative">
+            <Search
+              size={14}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
+            />
+            <input
+              type="search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={
+                kind === "ga4" ? "Search for properties" : "Search for sites"
+              }
+              autoFocus
+              className="w-full rounded-xl border border-slate-700 bg-slate-800 pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/30"
+            />
+          </div>
+        </div>
+
+        {/* List */}
+        <div className="max-h-80 overflow-y-auto border-t border-slate-800/60 px-3 py-2">
+          {isLoading && (
+            <div className="flex items-center justify-center gap-2 py-8 text-xs text-slate-500">
+              <Loader2 size={14} className="animate-spin" />
+              Loading from Google…
+            </div>
+          )}
+
+          {isError && (
+            <div className="flex flex-col items-start gap-2 px-3 py-4 text-xs">
+              <p className="text-red-400">{(error as Error).message}</p>
+              <button
+                onClick={() => refetch()}
+                className="text-brand-400 hover:text-brand-300"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+
+          {data && filtered.length === 0 && !isLoading && (
+            <div className="px-3 py-6 text-center text-xs text-slate-500">
+              {needle ? (
+                <>No matches for &ldquo;{q}&rdquo;.</>
+              ) : kind === "ga4" ? (
+                <>
+                  No GA4 properties found for this Google account.
+                  <br />
+                  Confirm Viewer access in GA4 → Admin → Account access.
+                </>
+              ) : (
+                <>
+                  No verified Search Console sites for this Google account.
+                  <br />
+                  Verify a site at{" "}
+                  <a
+                    href="https://search.google.com/search-console"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-brand-400 hover:underline"
+                  >
+                    search.google.com/search-console
+                  </a>{" "}
+                  then come back.
+                </>
+              )}
+            </div>
+          )}
+
+          {data &&
+            filtered.map((it) => {
+              const isCurrent = currentNorm === it.value;
+              return (
+                <button
+                  key={`${kind}-${it.value}`}
+                  type="button"
+                  onClick={() => onSelect(it.value)}
+                  disabled={submitting}
+                  className={clsx(
+                    "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition disabled:opacity-50",
+                    isCurrent
+                      ? "bg-brand-600/15 ring-1 ring-brand-500/40"
+                      : "hover:bg-slate-800/60",
+                  )}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-white" title={it.primary}>
+                      {it.primary}
+                    </p>
+                    {it.secondary && (
+                      <p
+                        className="truncate text-[11px] text-slate-500 font-mono"
+                        title={it.secondary}
+                      >
+                        {it.secondary}
+                      </p>
+                    )}
+                  </div>
+                  {isCurrent ? (
+                    <span className="flex-shrink-0 rounded bg-brand-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase text-brand-300">
+                      Linked
+                    </span>
+                  ) : (
+                    <CheckCircle2 size={14} className="flex-shrink-0 text-slate-700" />
+                  )}
+                </button>
+              );
+            })}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between gap-3 border-t border-slate-800/60 px-6 py-3">
+          <div className="min-w-0 flex-1 text-xs text-slate-500">
+            {submitError && <span className="text-red-400">{submitError}</span>}
+            {!submitError && isFetching && !isLoading && (
+              <span className="text-slate-600">Refreshing…</span>
+            )}
+            {!submitError && !isFetching && data && (
+              <span>
+                {filtered.length} {filtered.length === 1 ? "item" : "items"}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="text-xs text-slate-500 hover:text-slate-300 disabled:opacity-50 transition"
+          >
+            Refresh
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -918,6 +1226,342 @@ function GoogleIcon({ size = 18 }: { size?: number }) {
   );
 }
 
+// ── Conversion Events card ────────────────────────────────────────────────────
+
+function ConversionEventsCard({
+  propertyId,
+  property,
+  onSaved,
+}: {
+  propertyId: number;
+  property: PropertyResponse;
+  onSaved: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const ga4Linked = !!property.ga4_property_id;
+
+  const {
+    data: available,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ["available-events", propertyId],
+    queryFn: () => propertiesApi.getAvailableEvents(propertyId),
+    enabled: ga4Linked,
+    staleTime: 60_000,
+  });
+
+  const initial = property.primary_conversion_events ?? [];
+  const [selected, setSelected] = useState<string[]>(initial);
+  const [saved, setSaved] = useState(false);
+
+  // Keep local state synced when the property reloads after save
+  useEffect(() => {
+    setSelected(property.primary_conversion_events ?? []);
+  }, [property.primary_conversion_events]);
+
+  const mutation = useMutation({
+    mutationFn: (events: string[]) =>
+      propertiesApi.setPrimaryConversionEvents(propertyId, events),
+    onSuccess: () => {
+      onSaved();
+      queryClient.invalidateQueries({ queryKey: ["overview", propertyId] });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2_500);
+    },
+  });
+
+  const toggle = (name: string) => {
+    setSelected((prev) =>
+      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name],
+    );
+  };
+
+  const dirty =
+    selected.length !== initial.length ||
+    selected.some((n, i) => n !== initial[i]);
+
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+      <div className="mb-4 flex items-center gap-2.5">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15">
+          <Target size={15} className="text-emerald-400" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold text-white">
+            Primary conversion events
+          </h2>
+          <p className="text-xs text-slate-500">
+            Pick which GA4 events count as conversions on the dashboard
+          </p>
+        </div>
+      </div>
+
+      {!ga4Linked && (
+        <p className="text-xs text-slate-500">
+          Connect Google Analytics 4 to choose conversion events.
+        </p>
+      )}
+
+      {ga4Linked && isLoading && (
+        <div className="h-24 animate-pulse rounded-xl bg-slate-800" />
+      )}
+
+      {ga4Linked && isError && (
+        <p className="text-xs text-red-400">
+          Couldn&apos;t load events: {(error as Error).message}
+        </p>
+      )}
+
+      {ga4Linked && available && available.length === 0 && (
+        <div className="rounded-lg border border-slate-700/50 bg-slate-800/40 p-3 text-xs text-slate-400">
+          No GA4 events recorded yet for this property. Run a sync first, then
+          come back here.
+        </div>
+      )}
+
+      {ga4Linked && available && available.length > 0 && (
+        <>
+          <p className="mb-3 text-xs text-slate-500">
+            Each selected event shows on the Overview page as a "Conv. rate" KPI
+            (event count / total sessions). Pick the 1–3 events that matter
+            most — newsletter, contact form, signup, purchase, etc.
+          </p>
+
+          <div className="max-h-80 space-y-1 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950/40 p-2">
+            {available.map((ev) => {
+              const isSelected = selected.includes(ev.event_name);
+              return (
+                <button
+                  key={ev.event_name}
+                  type="button"
+                  onClick={() => toggle(ev.event_name)}
+                  className={clsx(
+                    "flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-xs transition",
+                    isSelected
+                      ? "bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/40"
+                      : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200",
+                  )}
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span
+                      className={clsx(
+                        "flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border",
+                        isSelected
+                          ? "border-emerald-400 bg-emerald-500/30"
+                          : "border-slate-600 bg-transparent",
+                      )}
+                    >
+                      {isSelected && <Check size={11} />}
+                    </span>
+                    <span className="truncate font-mono">{ev.event_name}</span>
+                    {ev.is_ga4_conversion && (
+                      <span className="flex-shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-400">
+                        GA4 Conv
+                      </span>
+                    )}
+                  </span>
+                  <span className="flex-shrink-0 font-mono text-[11px] text-slate-600">
+                    {ev.total_count.toLocaleString()}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => mutation.mutate(selected)}
+              disabled={!dirty || mutation.isPending || selected.length > 10}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {mutation.isPending ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : saved ? (
+                <Check size={13} />
+              ) : (
+                <Save size={13} />
+              )}
+              {mutation.isPending
+                ? "Saving…"
+                : saved
+                  ? "Saved"
+                  : `Save${dirty ? ` (${selected.length})` : ""}`}
+            </button>
+
+            <span className="text-xs text-slate-600">
+              {selected.length === 0 && "No events selected — conversion-rate KPIs hidden"}
+              {selected.length > 0 && selected.length <= 10 &&
+                `${selected.length} event${selected.length === 1 ? "" : "s"} selected`}
+              {selected.length > 10 && (
+                <span className="text-amber-400">Max 10 events</span>
+              )}
+            </span>
+
+            {mutation.isError && (
+              <span className="text-xs text-red-400">
+                {(mutation.error as Error).message}
+              </span>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Microsoft Clarity card ───────────────────────────────────────────────────
+
+function ClarityCard({
+  propertyId,
+  property,
+  onSaved,
+}: {
+  propertyId: number;
+  property: PropertyResponse;
+  onSaved: () => void;
+}) {
+  const initial = property.clarity_project_id ?? "";
+  const [value, setValue] = useState(initial);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setValue(property.clarity_project_id ?? "");
+  }, [property.clarity_project_id]);
+
+  const linked = !!property.clarity_project_id;
+  const dirty = value.trim().toLowerCase() !== initial.toLowerCase();
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      propertiesApi.setClarityProjectId(propertyId, value.trim() || null),
+    onSuccess: () => {
+      onSaved();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2_500);
+    },
+  });
+
+  const unlinkMutation = useMutation({
+    mutationFn: () => propertiesApi.setClarityProjectId(propertyId, null),
+    onSuccess: () => {
+      onSaved();
+      setValue("");
+    },
+  });
+
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div
+            className={clsx(
+              "flex h-8 w-8 items-center justify-center rounded-lg",
+              linked ? "bg-purple-500/15 text-purple-300" : "bg-slate-800 text-slate-500",
+            )}
+          >
+            <Activity size={15} />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-white">Microsoft Clarity</h2>
+            <p className="text-xs text-slate-500">
+              Heatmaps, session recordings, rage clicks
+            </p>
+          </div>
+        </div>
+        <StatusBadge linked={linked} />
+      </div>
+
+      {linked && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-slate-700/50 bg-slate-800/40 px-3 py-2.5">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-slate-500">Project ID</p>
+            <p className="truncate font-mono text-sm text-slate-200">
+              {property.clarity_project_id}
+            </p>
+          </div>
+          <a
+            href={`https://clarity.microsoft.com/projects/view/${property.clarity_project_id}/dashboard`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-shrink-0 text-brand-500 hover:text-brand-400 transition"
+            title="Open in Clarity"
+          >
+            <ExternalLink size={14} />
+          </a>
+        </div>
+      )}
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (dirty) saveMutation.mutate();
+        }}
+        className="flex gap-2"
+      >
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="abcd1234ef  (or paste full Clarity URL)"
+          className="flex-1 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 font-mono text-sm text-white placeholder-slate-600 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/30"
+        />
+        <button
+          type="submit"
+          disabled={!dirty || saveMutation.isPending}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {saveMutation.isPending ? (
+            <Loader2 size={13} className="animate-spin" />
+          ) : saved ? (
+            <Check size={13} />
+          ) : (
+            <Save size={13} />
+          )}
+          {saved ? "Saved" : linked ? "Update" : "Link"}
+        </button>
+        {linked && (
+          <button
+            type="button"
+            onClick={() => unlinkMutation.mutate()}
+            disabled={unlinkMutation.isPending}
+            className="inline-flex items-center gap-1 rounded-xl border border-red-900/40 bg-red-950/20 px-2.5 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-950/40 disabled:opacity-50"
+            title="Unlink Clarity"
+          >
+            {unlinkMutation.isPending ? (
+              <Loader2 size={11} className="animate-spin" />
+            ) : (
+              <Unlink size={11} />
+            )}
+          </button>
+        )}
+      </form>
+
+      {saveMutation.isError && (
+        <p className="mt-2 text-xs text-red-400">
+          {(saveMutation.error as Error).message}
+        </p>
+      )}
+
+      <p className="mt-3 text-xs text-slate-600">
+        Install the Clarity tracking snippet on your site at{" "}
+        <a
+          href="https://clarity.microsoft.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-brand-500 hover:text-brand-400"
+        >
+          clarity.microsoft.com
+        </a>
+        , then paste your project ID here. PRISM uses it to deep-link heatmaps
+        and session recordings from the Pages report.
+      </p>
+    </div>
+  );
+}
+
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
 function SettingsSkeleton() {
@@ -927,6 +1571,8 @@ function SettingsSkeleton() {
       <div className="h-48 rounded-2xl bg-slate-900" />
       <div className="h-48 rounded-2xl bg-slate-900" />
       <div className="h-56 rounded-2xl bg-slate-900" />
+      <div className="h-56 rounded-2xl bg-slate-900" />
+      <div className="h-48 rounded-2xl bg-slate-900" />
     </div>
   );
 }
