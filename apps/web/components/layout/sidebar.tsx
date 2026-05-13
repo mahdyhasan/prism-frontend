@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
 import {
@@ -10,14 +11,63 @@ import {
   BarChart2,
   MessageSquare,
   Settings,
-  Zap,
+  Newspaper,
+  Pin,
+  Table2,
 } from "lucide-react";
+import { PropertySwitcher } from "./property-switcher";
 
-const navItems = [
+const analyticsNavItems = [
   { label: "Overview", href: "overview", icon: LayoutDashboard },
   { label: "Search", href: "search", icon: Search },
   { label: "Insights", href: "insights", icon: Lightbulb },
   { label: "Reports", href: "reports", icon: BarChart2 },
+];
+
+interface AINavItem {
+  label: string;
+  icon: React.ElementType;
+  buildHref: (propertyId: number) => string;
+  matchPath: (pathname: string, propertyId: number) => boolean;
+}
+
+const aiNavItems: AINavItem[] = [
+  {
+    label: "Brief",
+    icon: Newspaper,
+    buildHref: (id) => `/properties/${id}/brief`,
+    matchPath: (pathname, id) => pathname.startsWith(`/properties/${id}/brief`),
+  },
+  {
+    label: "Chat",
+    icon: MessageSquare,
+    buildHref: (id) => `/chat?property_id=${id}`,
+    matchPath: (pathname, id) =>
+      pathname.startsWith("/chat") &&
+      (typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("property_id") === String(id)
+        : false),
+  },
+  {
+    label: "Pinned",
+    icon: Pin,
+    buildHref: (id) => `/pinned?property_id=${id}`,
+    matchPath: (pathname, id) =>
+      pathname.startsWith("/pinned") &&
+      (typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("property_id") === String(id)
+        : false),
+  },
+  {
+    label: "Explore",
+    icon: Table2,
+    buildHref: (id) => `/explore?property_id=${id}`,
+    matchPath: (pathname, id) =>
+      pathname.startsWith("/explore") &&
+      (typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("property_id") === String(id)
+        : false),
+  },
 ];
 
 export function Sidebar({ propertyId }: { propertyId: number }) {
@@ -34,18 +84,23 @@ export function Sidebar({ propertyId }: { propertyId: number }) {
         <span className="text-sm font-bold tracking-tight text-white">PRISM</span>
       </div>
 
+      {/* Property switcher */}
+      <div className="border-b border-slate-800 p-3">
+        <PropertySwitcher currentPropertyId={propertyId} />
+      </div>
+
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto p-3">
         <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-widest text-slate-600">
           Analytics
         </p>
-        {navItems.map(({ label, href, icon: Icon }) => {
+        {analyticsNavItems.map(({ label, href, icon: Icon }) => {
           const path = `${base}/${href}`;
           const active = pathname.startsWith(path);
           return (
             <Link
               key={href}
-              href={path}
+              href={path as Route}
               className={clsx(
                 "mb-0.5 flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition",
                 active
@@ -61,28 +116,40 @@ export function Sidebar({ propertyId }: { propertyId: number }) {
 
         <div className="mt-4 border-t border-slate-800 pt-4">
           <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-widest text-slate-600">
-            AI
+            AI Analyst
           </p>
-          <Link
-            href="/chat"
-            className={clsx(
-              "mb-0.5 flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition",
-              pathname === "/chat"
-                ? "bg-slate-800 text-white"
-                : "text-slate-400 hover:bg-slate-900 hover:text-white",
-            )}
-          >
-            <MessageSquare size={16} />
-            Chat
-          </Link>
+          {aiNavItems.map(({ label, icon: Icon, buildHref, matchPath }) => {
+            const href = buildHref(propertyId);
+            const active = matchPath(pathname, propertyId);
+            return (
+              <Link
+                key={label}
+                href={href as Route}
+                className={clsx(
+                  "mb-0.5 flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition",
+                  active
+                    ? "bg-slate-800 text-white"
+                    : "text-slate-400 hover:bg-slate-900 hover:text-white",
+                )}
+              >
+                <Icon size={16} />
+                {label}
+              </Link>
+            );
+          })}
         </div>
       </nav>
 
       {/* Bottom */}
       <div className="border-t border-slate-800 p-3">
         <Link
-          href="/settings/integrations"
-          className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:text-white transition"
+          href={`/properties/${propertyId}/settings` as Route}
+          className={clsx(
+            "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition",
+            pathname.startsWith(`/properties/${propertyId}/settings`)
+              ? "bg-slate-800 text-white"
+              : "text-slate-500 hover:text-white",
+          )}
         >
           <Settings size={16} />
           Settings

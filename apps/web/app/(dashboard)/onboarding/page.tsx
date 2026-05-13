@@ -1,12 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { propertiesApi } from "@/lib/api-client";
 
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState<"name" | "ga4" | "done">("name");
+
+  // If user already has properties (e.g. seeded admin), skip onboarding
+  useEffect(() => {
+    propertiesApi.list().then((props) => {
+      if (props.length > 0) {
+        router.replace(`/properties/${props[0].id}/overview`);
+      }
+    }).catch(() => {/* ignore — unauthenticated users handled by layout */});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [propertyId, setPropertyId] = useState<number | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [timezone, setTimezone] = useState("UTC");

@@ -6,17 +6,11 @@ export type DatePreset = "last_7d" | "last_30d" | "last_90d" | "last_12m" | "las
 export type CompareTo = "previous_period" | "same_period_last_year" | "none";
 
 const presets: { value: DatePreset; label: string }[] = [
-  { value: "last_7d", label: "7 days" },
-  { value: "last_30d", label: "30 days" },
-  { value: "last_90d", label: "90 days" },
-  { value: "last_12m", label: "12 months" },
-  { value: "last_14m", label: "14 months" },
-];
-
-const compareOptions: { value: CompareTo; label: string }[] = [
-  { value: "none", label: "No comparison" },
-  { value: "previous_period", label: "vs previous period" },
-  { value: "same_period_last_year", label: "vs same period last year" },
+  { value: "last_7d", label: "7d" },
+  { value: "last_30d", label: "28d" },
+  { value: "last_90d", label: "90d" },
+  { value: "last_12m", label: "12m" },
+  { value: "last_14m", label: "14m" },
 ];
 
 interface DateRangePickerProps {
@@ -32,35 +26,62 @@ export function DateRangePicker({
   onPresetChange,
   onCompareChange,
 }: DateRangePickerProps) {
+  const compareEnabled = compareTo !== "none";
+
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="flex items-center rounded-lg border border-slate-700 bg-slate-900 p-0.5">
-        {presets.map((p) => (
-          <button
-            key={p.value}
-            onClick={() => onPresetChange(p.value)}
-            className={clsx(
-              "rounded-md px-3 py-1.5 text-xs font-medium transition",
-              preset === p.value
-                ? "bg-brand-600 text-white"
-                : "text-slate-400 hover:text-white",
-            )}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
-      <select
-        value={compareTo}
-        onChange={(e) => onCompareChange(e.target.value as CompareTo)}
-        className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-400 focus:border-slate-600 focus:outline-none"
+    <div className="flex flex-wrap items-center gap-3">
+      <div
+        role="tablist"
+        aria-label="Date range"
+        className="flex items-center rounded-lg border border-slate-800 bg-slate-900 p-0.5"
       >
-        {compareOptions.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+        {presets.map((p) => {
+          const active = preset === p.value;
+          return (
+            <button
+              key={p.value}
+              role="tab"
+              aria-selected={active}
+              onClick={() => onPresetChange(p.value)}
+              className={clsx(
+                "rounded-md px-3 py-1.5 text-xs font-medium transition",
+                active
+                  ? "bg-brand-600 text-white shadow-sm"
+                  : "text-slate-400 hover:text-white",
+              )}
+            >
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={compareEnabled}
+        onClick={() => onCompareChange(compareEnabled ? "none" : "previous_period")}
+        className={clsx(
+          "inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+          compareEnabled
+            ? "border-brand-500 bg-brand-600/10 text-white"
+            : "border-slate-800 bg-slate-900 text-slate-400 hover:text-white",
+        )}
+      >
+        <span
+          className={clsx(
+            "relative inline-block h-3.5 w-7 rounded-full transition",
+            compareEnabled ? "bg-brand-500" : "bg-slate-700",
+          )}
+        >
+          <span
+            className={clsx(
+              "absolute top-0.5 h-2.5 w-2.5 rounded-full bg-white transition-all",
+              compareEnabled ? "left-3.5" : "left-0.5",
+            )}
+          />
+        </span>
+        Compare to previous period
+      </button>
     </div>
   );
 }
