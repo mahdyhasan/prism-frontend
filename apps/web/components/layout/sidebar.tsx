@@ -17,6 +17,8 @@ import {
   FileText,
   Activity,
   ExternalLink,
+  Gauge,
+  Zap,
 } from "lucide-react";
 import { PropertySwitcher } from "./property-switcher";
 import { useProperty } from "@/hooks/use-properties";
@@ -28,6 +30,7 @@ import {
 const analyticsNavItems = [
   { label: "Overview", href: "overview", icon: LayoutDashboard },
   { label: "Pages", href: "pages", icon: FileText },
+  { label: "Performance", href: "performance", icon: Gauge },
   { label: "Search", href: "search", icon: Search },
   { label: "Insights", href: "insights", icon: Lightbulb },
   { label: "Reports", href: "reports", icon: BarChart2 },
@@ -73,6 +76,16 @@ const aiNavItems: AINavItem[] = [
     buildHref: (id) => `/explore?property_id=${id}`,
     matchPath: (pathname, id) =>
       pathname.startsWith("/explore") &&
+      (typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("property_id") === String(id)
+        : false),
+  },
+  {
+    label: "Actions",
+    icon: Zap,
+    buildHref: (id) => `/actions?property_id=${id}`,
+    matchPath: (pathname, id) =>
+      pathname.startsWith("/actions") &&
       (typeof window !== "undefined"
         ? new URLSearchParams(window.location.search).get("property_id") === String(id)
         : false),

@@ -8,10 +8,12 @@ import { clsx } from "clsx";
 import {
   AlertCircle,
   Activity,
+  AlertTriangle,
   Check,
   CheckCircle2,
   ChevronDown,
   ExternalLink,
+  Gauge,
   KeyRound,
   Loader2,
   RefreshCw,
@@ -27,11 +29,13 @@ import { Header } from "@/components/layout/header";
 import {
   authApi,
   propertiesApi,
+  propertySettingsApi,
   syncApi,
   type GA4PropertyOption,
   type GSCSiteOption,
   type IntegrationSyncStatus,
   type PropertyResponse,
+  type PropertySettingsResponse,
 } from "@/lib/api-client";
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -112,6 +116,8 @@ export default function SettingsPage() {
                   property={property}
                   onSaved={invalidateProperty}
                 />
+
+                <CWVSettingsCard propertyId={propertyId} />
 
                 <LLMConfigCard propertyId={propertyId} />
               </>
@@ -1667,6 +1673,165 @@ function ClarityCard({
         , then paste your project ID here. PRISM uses it to deep-link heatmaps
         and session recordings from the Pages report.
       </p>
+    </div>
+  );
+}
+
+// ── CWV + Actions settings ────────────────────────────────────────────────────
+
+function CWVSettingsCard({ propertyId }: { propertyId: number }) {
+  const queryClient = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["cwv-settings", propertyId],
+    queryFn: () => propertySettingsApi.get(propertyId),
+    staleTime: 60_000,
+  });
+
+  const mutation = useMutation({
+    mutationFn: (body: Partial<Omit<PropertySettingsResponse, "property_id">>) =>
+      propertySettingsApi.update(propertyId, body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cwv-settings", propertyId] }),
+  });
+
+  function toggle(field: keyof Omit<PropertySettingsResponse, "property_id">) {
+    if (!data) return;
+    mutation.mutate({ [field]: !data[field] });
+  }
+
+  function setCount(n: number) {
+    mutation.mutate({ cwv_top_pages_count: n });
+  }
+
+  const settings = data;
+
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+      <div className="mb-5 flex items-center gap-2.5">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500/15 text-brand-300">
+          <Gauge size={15} />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold text-white">Performance & actions</h2>
+          <p className="text-xs text-slate-500">
+            Core Web Vitals audit schedule and action safety gates
+          </p>
+        </div>
+      </div>
+
+      {isLoading && (
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <Loader2 size={14} className="animate-spin" />
+          Loading settings...
+        </div>
+      )}
+
+      {settings && (
+        <div className="space-y-4">
+          {/* CWV audit toggle */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-white">CWV nightly audit</p>
+              <p className="text-xs text-slate-500">
+                Run PageSpeed Insights on top pages every night at 03:00 UTC
+              </p>
+            </div>
+            <button
+              onClick={() => toggle("cwv_audit_enabled")}
+              disabled={mutation.isPending}
+              className={clsx(
+                "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                settings.cwv_audit_enabled ? "bg-brand-600" : "bg-slate-700",
+              )}
+            >
+              <span
+                className={clsx(
+                  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                  settings.cwv_audit_enabled ? "translate-x-5" : "translate-x-0",
+                )}
+              />
+            </button>
+          </div>
+
+          {/* Mobile / desktop strategy */}
+          <div className="flex items-center gap-6 rounded-xl border border-slate-700/50 bg-slate-800/40 px-4 py-3">
+            <p className="flex-1 text-xs text-slate-400">Audit strategies</p>
+            {[
+              { label: "Mobile", field: "cwv_mobile_enabled" as const },
+              { label: "Desktop", field: "cwv_desktop_enabled" as const },
+            ].map(({ label, field }) => (
+              <label key={field} className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={!!settings[field]}
+                  onChange={() => toggle(field)}
+                  disabled={mutation.isPending}
+                  className="h-4 w-4 rounded border-slate-600 bg-slate-700 accent-brand-500"
+                />
+                <span className="text-xs text-slate-300">{label}</span>
+              </label>
+            ))}
+          </div>
+
+          {/* Top pages count */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-white">Pages per audit run</p>
+              <p className="text-xs text-slate-500">
+                Top N pages by sessions to audit each night (1–100)
+              </p>
+            </div>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={settings.cwv_top_pages_count}
+              onChange={(e) => {
+                const n = parseInt(e.target.value, 10);
+                if (!isNaN(n) && n >= 1 && n <= 100) setCount(n);
+              }}
+              className="w-20 rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-center text-sm text-white outline-none focus:border-brand-500"
+            />
+          </div>
+
+          <div className="border-t border-slate-800 pt-4">
+            {/* Destructive actions gate */}
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <AlertTriangle size={13} className="text-amber-400" />
+                  <p className="text-sm font-medium text-white">Allow destructive actions</p>
+                </div>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Permit the AI analyst to queue sitemap deletion. When off, delete
+                  requests are blocked at execution time regardless of confirmation.
+                </p>
+              </div>
+              <button
+                onClick={() => toggle("allow_destructive_actions")}
+                disabled={mutation.isPending}
+                className={clsx(
+                  "relative mt-0.5 inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                  settings.allow_destructive_actions ? "bg-amber-600" : "bg-slate-700",
+                )}
+              >
+                <span
+                  className={clsx(
+                    "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                    settings.allow_destructive_actions ? "translate-x-5" : "translate-x-0",
+                  )}
+                />
+              </button>
+            </div>
+          </div>
+
+          {mutation.isError && (
+            <p className="text-xs text-red-400">
+              {(mutation.error as Error).message}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

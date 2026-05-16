@@ -823,6 +823,154 @@ export const briefApi = {
     ),
 };
 
+// ── Actions ───────────────────────────────────────────────────────────────────
+
+export type ActionStatus =
+  | "pending_confirmation"
+  | "confirmed"
+  | "executing"
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+  | "expired";
+
+export interface ActionResponse {
+  id: number;
+  property_id: number;
+  tool_name: string;
+  tool_input: Record<string, unknown>;
+  status: ActionStatus;
+  confirmation_required: boolean;
+  created_at: string;
+  confirmed_at: string | null;
+  executed_at: string | null;
+  result: Record<string, unknown> | null;
+  error: string | null;
+  /** Only present when status == "pending_confirmation" */
+  confirmation_token: string | null;
+}
+
+export const actionsApi = {
+  list: (propertyId: number, params: { status?: ActionStatus; limit?: number } = {}) => {
+    const qs = buildQS({ property_id: propertyId, ...params });
+    return api.get<ActionResponse[]>(`/api/v1/actions?${qs}`);
+  },
+  get: (id: number) => api.get<ActionResponse>(`/api/v1/actions/${id}`),
+  confirm: (id: number, token: string) =>
+    api.post<ActionResponse>(`/api/v1/actions/${id}/confirm`, { token }),
+  cancel: (id: number) =>
+    api.post<ActionResponse>(`/api/v1/actions/${id}/cancel`, {}),
+};
+
+// ── Core Web Vitals ───────────────────────────────────────────────────────────
+
+export type CWVStatus = "good" | "needs_improvement" | "poor" | "unknown";
+
+export interface PageCWVResponse {
+  url: string;
+  strategy: string;
+  cwv_status: CWVStatus;
+  lcp_ms: number | null;
+  inp_ms: number | null;
+  cls: number | null;
+  fcp_ms: number | null;
+  ttfb_ms: number | null;
+  lighthouse_performance_score: number | null;
+  audited_at: string | null;
+  opportunities: unknown[];
+}
+
+export interface OriginCWVResponse {
+  strategy: string;
+  lcp_ms: number | null;
+  inp_ms: number | null;
+  cls: number | null;
+  cwv_status: CWVStatus;
+  audited_at: string | null;
+}
+
+export interface CWVProblemPage {
+  url: string;
+  strategy: string;
+  cwv_status: CWVStatus;
+  lcp_ms: number | null;
+  inp_ms: number | null;
+  cls: number | null;
+  lighthouse_performance_score: number | null;
+  audited_at: string | null;
+}
+
+export interface CWVScanResponse {
+  pages: CWVProblemPage[];
+  total: number;
+}
+
+export interface CWVMobileDesktopRow {
+  url: string;
+  mobile_status: CWVStatus;
+  desktop_status: CWVStatus;
+  mobile_lcp_ms: number | null;
+  desktop_lcp_ms: number | null;
+  lcp_gap_ms: number | null;
+}
+
+export interface CWVMobileDesktopResponse {
+  rows: CWVMobileDesktopRow[];
+}
+
+export interface CWVTrendPoint {
+  audited_at: string;
+  cwv_status: CWVStatus;
+  lcp_ms: number | null;
+  inp_ms: number | null;
+  cls: number | null;
+  lighthouse_performance_score: number | null;
+}
+
+export interface CWVTrendResponse {
+  url: string;
+  strategy: string;
+  trend: CWVTrendPoint[];
+}
+
+export const cwvApi = {
+  getOrigin: (propertyId: number, strategy: "mobile" | "desktop" = "mobile") =>
+    api.get<OriginCWVResponse>(
+      `/api/v1/properties/${propertyId}/cwv/origin?strategy=${strategy}`,
+    ),
+  scanProblems: (
+    propertyId: number,
+    params: { strategy?: "mobile" | "desktop"; limit?: number } = {},
+  ) => {
+    const qs = buildQS(params);
+    return api.get<CWVScanResponse>(
+      `/api/v1/properties/${propertyId}/cwv/problems${qs ? `?${qs}` : ""}`,
+    );
+  },
+  getMobileDesktop: (propertyId: number) =>
+    api.get<CWVMobileDesktopResponse>(
+      `/api/v1/properties/${propertyId}/cwv/mobile-desktop`,
+    ),
+};
+
+// ── CWV + Actions settings ────────────────────────────────────────────────────
+
+export interface PropertySettingsResponse {
+  property_id: number;
+  cwv_audit_enabled: boolean;
+  cwv_top_pages_count: number;
+  cwv_mobile_enabled: boolean;
+  cwv_desktop_enabled: boolean;
+  allow_destructive_actions: boolean;
+}
+
+export const propertySettingsApi = {
+  get: (propertyId: number) =>
+    api.get<PropertySettingsResponse>(`/api/v1/properties/${propertyId}/cwv/settings`),
+  update: (propertyId: number, body: Partial<Omit<PropertySettingsResponse, "property_id">>) =>
+    api.put<PropertySettingsResponse>(`/api/v1/properties/${propertyId}/cwv/settings`, body),
+};
+
 // SSE streaming helper for chat messages
 export function streamChatMessage(
   sessionId: number,
