@@ -1,0 +1,1 @@
+"""Actions layer — mutating agent tools with confirmation flow and audit trail."""

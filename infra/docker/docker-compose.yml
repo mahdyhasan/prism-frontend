@@ -1,0 +1,121 @@
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: prism-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: prism
+      MYSQL_USER: prism
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-prism}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_0900_ai_ci
+      --default-authentication-plugin=caching_sha2_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: prism-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    container_name: prism-api
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      PRISM_DATABASE_URL: mysql+aiomysql://prism:${MYSQL_PASSWORD:-prism}@mysql:3306/prism
+      PRISM_REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../../apps/api:/app/apps/api
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.worker
+    container_name: prism-worker
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      PRISM_DATABASE_URL: mysql+aiomysql://prism:${MYSQL_PASSWORD:-prism}@mysql:3306/prism
+      PRISM_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../../apps/api:/app/apps/api
+
+  beat:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.worker
+    container_name: prism-beat
+    restart: unless-stopped
+    command: celery -A prism.workers.celery_app:celery_app beat --loglevel=info
+    env_file:
+      - ../../.env
+    environment:
+      PRISM_DATABASE_URL: mysql+aiomysql://prism:${MYSQL_PASSWORD:-prism}@mysql:3306/prism
+      PRISM_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - worker
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.web
+    container_name: prism-web
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      PRISM_API_BASE_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
+  redis_data:

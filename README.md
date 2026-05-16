@@ -1,19 +1,67 @@
-# PRISM — Frontend
+# PRISM
 
-Next.js 15 dashboard for the PRISM analytics platform by [Augmex Technologies](https://augmex.io).
+AI-powered analytics platform by [Augmex Technologies](https://augmex.io).
 
-PRISM connects to Google Analytics 4 and Google Search Console, warehouses the data, and uses Claude AI to generate plain-language insights and a conversational analytics chatbot.
-
-> This repository contains the frontend only (`apps/web`). The API backend runs separately on a VPS.
+PRISM connects Google Analytics 4 and Google Search Console, warehouses data in MySQL, and uses Claude AI to generate plain-language insights, a daily brief, a conversational analytics chatbot, and automated pinned-question re-runs.
 
 ---
 
-## Quick start (local dev)
+## What's inside
+
+```
+prism/
+  apps/
+    api/          FastAPI backend — Python 3.12, SQLAlchemy 2.0 async, Celery
+    web/          Next.js 15 frontend — TypeScript, Tailwind CSS
+  infra/
+    docker/       Docker Compose + Dockerfiles
+    migrations/   Alembic migrations (MySQL 8.0)
+  packages/
+    shared-types/ Shared TypeScript types
+  scripts/        One-off data scripts (backfill, seed)
+```
+
+---
+
+## Stack
+
+| Layer | Technology |
+|---|---|
+| Backend | Python 3.12, FastAPI, SQLAlchemy 2.0 (async), Pydantic v2 |
+| Task queue | Celery + Redis |
+| Database | MySQL 8.0 |
+| Frontend | Next.js 15 (App Router), TypeScript, Tailwind CSS, TanStack Query |
+| Auth | NextAuth + Google OAuth |
+| AI | Claude via Anthropic SDK (`claude-sonnet-4-7`, `claude-haiku-4-5`) |
+| Hosting | VPS (API + worker + DB) + Vercel (frontend) |
+
+---
+
+## Features shipped
+
+| Area | What PRISM does |
+|---|---|
+| **Data ingestion** | Nightly GA4 + GSC sync; cross-source `xs_page_daily` join table |
+| **Overview dashboard** | Sessions, users, engagement, bounce rate, per-event conversion rates with deltas |
+| **Pages report** | Traffic, conversion rate, engagement, GSC signals, Page Health score, Clarity frustration score |
+| **Performance** | Core Web Vitals (PSI + CrUX): site-wide origin card, problem pages table, mobile vs desktop |
+| **Search** | GSC clicks, impressions, CTR, position; top queries and pages; opportunities |
+| **Insights** | Nightly detection: anomaly, trend, decay, cannibalization, opportunity, CWV regression, frustration |
+| **Daily brief** | AI-narrated summary of the last 24 hours, generated at 07:00 UTC |
+| **Chat agent** | Claude with 16 tools (GA4, GSC, cross-source, CWV, memory, actions) via SSE streaming |
+| **Pinned questions** | Scheduled re-runs with structured JSON answers and prior-run diffing |
+| **Actions panel** | AI queues GSC sitemap submit/delete; user confirms via HMAC-verified one-click |
+| **Memory** | Automatic extraction of goals, hypotheses, and decisions from chat turns |
+| **Microsoft Clarity** | Deep-link heatmaps + recordings from Pages; frustration score ingestion |
+
+---
+
+## Quick start
 
 ### Prerequisites
 
 | Tool | Version |
-|------|---------|
+|---|---|
 | Docker + Docker Compose | 24+ |
 | Python | 3.12+ |
 | Node.js | 22+ |
@@ -25,171 +73,145 @@ PRISM connects to Google Analytics 4 and Google Search Console, warehouses the d
 ```bash
 git clone <repo-url> prism
 cd prism
-cp .env.example .env
-# Fill in .env — at minimum set PRISM_TOKEN_ENCRYPTION_KEY, PRISM_JWT_SECRET,
-# GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, ANTHROPIC_API_KEY
+cp apps/api/.env.example apps/api/.env
+# Fill in apps/api/.env — see "Environment variables" below
 ```
 
-Generate a 32-byte encryption key:
+Generate required secrets:
 
 ```bash
+# Encryption key (32-byte base64)
 python -c "import secrets, base64; print(base64.b64encode(secrets.token_bytes(32)).decode())"
+
+# JWT secret
+python -c "import secrets; print(secrets.token_hex(32))"
+
+# Actions HMAC secret
+python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
 ### 2. Install dependencies
 
 ```bash
 # Python backend
-uv pip install -e "apps/api[dev]"
+cd apps/api && uv pip install -e ".[dev]" && cd ../..
 
 # Frontend
 pnpm install
 ```
 
-### 3. Start services
+### 3. Start infrastructure
 
 ```bash
 docker compose -f infra/docker/docker-compose.yml up -d
 ```
 
-This starts: MySQL 8, Redis 7, FastAPI API, Celery worker, Celery beat, Next.js frontend.
+Starts: MySQL 8, Redis 7, FastAPI, Celery worker, Celery beat, Next.js.
 
-### 4. Run database migrations
+### 4. Run migrations
 
 ```bash
-cd apps/api
-alembic -c ../../infra/migrations/alembic.ini upgrade head
+alembic -c infra/migrations/alembic.ini upgrade head
 ```
 
 ### 5. Verify
 
 | Service | URL |
-|---------|-----|
+|---|---|
 | Frontend | http://localhost:3000 |
 | API health | http://localhost:8000/api/v1/health |
 | API docs | http://localhost:8000/api/docs |
 
 ---
 
-## Development workflow
+## Development
 
-### Backend only (no Docker)
+### Backend (no Docker)
 
 ```bash
 # Terminal 1 — API
-cd apps/api
-uvicorn prism.main:app --reload --port 8000
+cd apps/api && uvicorn prism.main:app --reload --port 8000
 
 # Terminal 2 — Worker
-cd apps/api
-celery -A prism.workers.celery_app:celery_app worker --loglevel=info
+cd apps/api && celery -A prism.workers.celery_app:celery_app worker --loglevel=info
 
-# Terminal 3 — Beat scheduler
-cd apps/api
-celery -A prism.workers.celery_app:celery_app beat --loglevel=info
+# Terminal 3 — Beat
+cd apps/api && celery -A prism.workers.celery_app:celery_app beat --loglevel=info
 ```
 
-MySQL and Redis still need to be running (use `docker compose up mysql redis`).
+MySQL and Redis must still be running: `docker compose up mysql redis -d`
 
 ### Frontend only
 
 ```bash
-cd apps/web
-pnpm dev
+cd apps/web && pnpm dev
 ```
 
-### Running tests
+### Tests
 
 ```bash
 # Backend
 pytest apps/api/tests/ -v
 
-# Frontend lint and typecheck
+# Frontend
 pnpm --filter prism-web lint
 pnpm --filter prism-web typecheck
 ```
 
-### Database migrations
+### Migrations
 
 ```bash
-# Create a new migration
-alembic -c infra/migrations/alembic.ini revision --autogenerate -m "describe the change"
+# New migration
+alembic -c infra/migrations/alembic.ini revision --autogenerate -m "description"
 
-# Apply migrations
+# Apply
 alembic -c infra/migrations/alembic.ini upgrade head
 
-# Roll back one step
+# Roll back one
 alembic -c infra/migrations/alembic.ini downgrade -1
 ```
 
 ---
 
-## Repository structure
+## Nightly schedule (UTC)
 
-```
-prism/
-  apps/
-    api/          FastAPI backend (Python 3.12, SQLAlchemy 2.0, Celery)
-    web/          Next.js 15 frontend (TypeScript, Tailwind, shadcn/ui)
-    worker/       Celery worker entrypoint
-  packages/
-    shared-types/ OpenAPI-generated TypeScript types
-  infra/
-    docker/       Docker Compose + Dockerfiles
-    migrations/   Alembic migrations
-  scripts/        One-off data scripts (backfill, seed)
-  docs/           Architecture, API, data model, AI prompt docs
-  .github/
-    workflows/    CI (GitHub Actions)
-```
-
----
-
-## Build phases
-
-| Phase | Scope | Status |
-|-------|-------|--------|
-| 0 | Foundations (this PR) | In progress |
-| 1 | GA4 ingestion and overview dashboard | Pending |
-| 2 | GSC ingestion and search page | Pending |
-| 3 | AI insights engine | Pending |
-| 4 | Chatbot agent | Pending |
-| 5 | Custom report builder | Pending |
-| 6 | Multi-property and tenancy hardening | Pending |
-| 7 | Paid ads adapters (Google Ads, Meta) | Deferred |
-
----
-
-## Stack
-
-**Backend:** Python 3.12, FastAPI, SQLAlchemy 2.0 (async), Alembic, Pydantic v2, Celery, Redis, aiomysql, structlog, Anthropic SDK
-
-**Frontend:** Next.js 15 (App Router), TypeScript, Tailwind CSS, shadcn/ui, Tremor, TanStack Query, Zustand, NextAuth
-
-**Database:** MySQL 8.0 (utf8mb4)
-
-**AI:** Claude via Anthropic SDK (narrative: `claude-sonnet-4-7-20251222`, cheap: `claude-haiku-4-5-20251001`)
-
-**Infra:** Docker Compose (local), InMotion VPS + Apache (API/worker/DB), Vercel (frontend)
+| Time | Task |
+|---|---|
+| 03:00 | CWV page audits (PSI) |
+| 03:30 | Microsoft Clarity sync |
+| 04:00 | GA4 daily sync |
+| 04:15 | CWV origin pull (CrUX) |
+| 05:00 | GSC daily sync |
+| 06:00 | Cross-source join + AI insights |
+| 07:00 | Daily brief generation |
+| 08:00 | Pinned question re-runs |
+| Every 5 min | Expire stale actions |
 
 ---
 
 ## Environment variables
 
-See [.env.example](.env.example) for the full list with descriptions.
+Copy `apps/api/.env.example` to `apps/api/.env` and fill in:
 
-Critical variables to set before first run:
+| Variable | Required | Description |
+|---|---|---|
+| `PRISM_TOKEN_ENCRYPTION_KEY` | Yes | 32-byte base64 key for encrypting Google tokens |
+| `PRISM_JWT_SECRET` | Yes | JWT signing secret |
+| `GOOGLE_OAUTH_CLIENT_ID` | Yes | Google OAuth client ID |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Yes | Google OAuth client secret |
+| `ANTHROPIC_API_KEY` | Yes | Anthropic API key |
+| `ACTIONS_HMAC_SECRET` | Yes | HMAC secret for action confirmation tokens |
+| `PSI_API_KEY` | No | Google PageSpeed Insights API key |
+| `CRUX_API_KEY` | No | Chrome UX Report API key (same key as PSI) |
+| `SENTRY_DSN` | No | Sentry DSN for error tracking |
 
-- `PRISM_TOKEN_ENCRYPTION_KEY` — 32-byte base64 key for encrypting Google refresh tokens
-- `PRISM_JWT_SECRET` — JWT signing secret
-- `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` — Google OAuth app credentials
-- `ANTHROPIC_API_KEY` — Anthropic API key
+Frontend variables go in `apps/web/.env.local` — see `apps/web/.env.example`.
 
 ---
 
-## Docs
+## Contributing
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Data model](docs/DATA_MODEL.md)
-- [API reference](docs/API.md)
-- [AI prompt reference](docs/AI_PROMPTS.md)
+1. Branch off `main`
+2. Backend changes live in `apps/api/`, frontend in `apps/web/`
+3. Run `pytest` and `pnpm lint` before opening a PR
+4. Never commit `.env` files — use `.env.example` as the template

@@ -1,6 +1,25 @@
-# ── Backend — stays on VPS, not in the public frontend repo ──────────────────
-apps/api/
-infra/
+# ── Secrets — never commit ────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+apps/api/.env
+apps/api/.env.*
+!**/.env.example
+*.pem
+service-account*.json
+
+# ── Docs folder (design docs, prompts, specs) ─────────────────────────────────
+docs/
+
+# ── Markdown — keep only README files ────────────────────────────────────────
+*.md
+!README.md
+!apps/web/README.md
+!packages/shared-types/README.md
+
+# ── Claude / AI tools ────────────────────────────────────────────────────────
+CLAUDE.md
+.claude/
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
@@ -24,35 +43,16 @@ htmlcov/
 .coverage
 coverage.xml
 
-# ── Node ─────────────────────────────────────────────────────────────────────
+# ── Node ──────────────────────────────────────────────────────────────────────
 node_modules/
 .next/
 out/
 .pnpm-store/
 
-# ── Secrets ───────────────────────────────────────────────────────────────────
-.env
-.env.local
-.env.*.local
-!.env.example
-*.pem
-service-account*.json
-
-# ── Claude / AI tools ────────────────────────────────────────────────────────
-CLAUDE.md
-.claude/
-.gitignore.frontend
-
-# ── Docs (keep only README files) ────────────────────────────────────────────
-*.md
-!README.md
-!apps/web/README.md
-!packages/shared-types/README.md
-
-# ── Docker ───────────────────────────────────────────────────────────────────
+# ── Docker ────────────────────────────────────────────────────────────────────
 .docker/
 
-# ── Editors ──────────────────────────────────────────────────────────────────
+# ── Editors ───────────────────────────────────────────────────────────────────
 .idea/
 .vscode/
 *.swp
@@ -60,7 +60,7 @@ CLAUDE.md
 .DS_Store
 Thumbs.db
 
-# ── Misc ─────────────────────────────────────────────────────────────────────
+# ── Misc ──────────────────────────────────────────────────────────────────────
 *.log
 *.sqlite3
 *.tsbuildinfo

@@ -1,0 +1,1 @@
+"""CWV (Core Web Vitals) services — PSI, CrUX, and ingestion orchestration."""
