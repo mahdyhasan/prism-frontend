@@ -158,11 +158,18 @@ function OriginCard({
         </div>
       )}
       {error && (
-        <p className="text-sm text-red-400">
-          Could not load origin CWV data. CrUX may not have enough data for this site.
+        <p className="text-sm text-slate-500">
+          No CrUX data yet. Data appears once your site has enough real-user Chrome
+          traffic (typically a few weeks after the CrUX API key is configured).
         </p>
       )}
-      {data && (
+      {data && !data.found && (
+        <p className="text-sm text-slate-500">
+          CrUX has no field data for this origin yet — not enough real-user traffic
+          collected. Run a manual PSI audit from the chat to get lab data.
+        </p>
+      )}
+      {data && data.found && (
         <div className="flex items-center gap-6">
           <StatusBadge status={data.cwv_status} />
           <div className="flex gap-8">
@@ -182,6 +189,7 @@ function OriginCard({
           )}
         </div>
       )}
+
     </div>
   );
 }
@@ -250,9 +258,16 @@ function ProblemPagesTable({
         </div>
       )}
       {error && (
-        <p className="px-5 py-8 text-sm text-red-400">Failed to load page audits.</p>
+        <div className="px-5 py-8 text-center">
+          <Gauge size={28} className="mx-auto mb-2 text-slate-700" />
+          <p className="text-sm font-medium text-slate-400">No audit data yet</p>
+          <p className="mt-1 text-xs text-slate-600">
+            The nightly PSI audit runs at 03:00 UTC. You can also trigger one from the
+            chat: "run a PSI audit on augmex.io".
+          </p>
+        </div>
       )}
-      {!isLoading && pages.length === 0 && (
+      {!isLoading && !error && pages.length === 0 && (
         <div className="px-5 py-8 text-center">
           <CheckCircle2 size={32} className="mx-auto mb-2 text-emerald-500" />
           <p className="text-sm font-medium text-white">All audited pages are passing</p>
