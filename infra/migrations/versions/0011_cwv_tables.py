@@ -36,6 +36,17 @@ def _has_table(conn, table: str) -> bool:
     return sa.inspect(conn).has_table(table)
 
 
+def _has_index(conn, table: str, index: str) -> bool:
+    result = conn.execute(
+        sa.text(
+            "SELECT COUNT(*) FROM information_schema.statistics "
+            "WHERE table_schema = DATABASE() AND table_name = :tbl AND index_name = :idx"
+        ),
+        {"tbl": table, "idx": index},
+    )
+    return result.scalar() > 0
+
+
 def upgrade() -> None:
     conn = op.get_bind()
 
@@ -91,11 +102,15 @@ def upgrade() -> None:
             sa.PrimaryKeyConstraint("id"),
             **_TBL,
         )
+    # Indexes created separately so partial runs (table exists, index missing) are retried.
+    if not _has_index(conn, "cwv_page_audits", "ix_cwv_page_audits_property_id"):
         op.create_index("ix_cwv_page_audits_property_id", "cwv_page_audits", ["property_id"])
-        op.create_index(
-            "ix_cwv_page_audits_prop_url_strategy_at",
-            "cwv_page_audits",
-            ["property_id", "url_normalized", "strategy", "audited_at"],
+    if not _has_index(conn, "cwv_page_audits", "ix_cwv_page_audits_prop_url_strategy_at"):
+        # url_normalized is VARCHAR(1024) × utf8mb4 = up to 4096 bytes; InnoDB key limit
+        # is 3072 bytes, so we use a 750-char prefix (750 × 4 = 3000 bytes).
+        op.execute(
+            "CREATE INDEX ix_cwv_page_audits_prop_url_strategy_at "
+            "ON cwv_page_audits (property_id, url_normalized(750), strategy, audited_at)"
         )
 
     # ── cwv_origin_audits ─────────────────────────────────────────────────────

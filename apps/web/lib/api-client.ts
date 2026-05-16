@@ -962,12 +962,22 @@ export interface PropertySettingsResponse {
   cwv_mobile_enabled: boolean;
   cwv_desktop_enabled: boolean;
   allow_destructive_actions: boolean;
+  has_psi_api_key: boolean;
+}
+
+export interface PropertySettingsUpdate {
+  cwv_audit_enabled?: boolean;
+  cwv_top_pages_count?: number;
+  cwv_mobile_enabled?: boolean;
+  cwv_desktop_enabled?: boolean;
+  allow_destructive_actions?: boolean;
+  psi_api_key?: string; // plaintext — backend encrypts it; empty string clears
 }
 
 export const propertySettingsApi = {
   get: (propertyId: number) =>
     api.get<PropertySettingsResponse>(`/api/v1/properties/${propertyId}/cwv/settings`),
-  update: (propertyId: number, body: Partial<Omit<PropertySettingsResponse, "property_id">>) =>
+  update: (propertyId: number, body: PropertySettingsUpdate) =>
     api.put<PropertySettingsResponse>(`/api/v1/properties/${propertyId}/cwv/settings`, body),
 };
 

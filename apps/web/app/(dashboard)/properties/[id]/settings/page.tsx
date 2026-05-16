@@ -36,6 +36,7 @@ import {
   type IntegrationSyncStatus,
   type PropertyResponse,
   type PropertySettingsResponse,
+  type PropertySettingsUpdate,
 } from "@/lib/api-client";
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -1688,13 +1689,28 @@ function CWVSettingsCard({ propertyId }: { propertyId: number }) {
     staleTime: 60_000,
   });
 
+  const [psiKey, setPsiKey] = useState("");
+  const [psiKeySaved, setPsiKeySaved] = useState(false);
+  const [showPsiKey, setShowPsiKey] = useState(false);
+
   const mutation = useMutation({
-    mutationFn: (body: Partial<Omit<PropertySettingsResponse, "property_id">>) =>
+    mutationFn: (body: PropertySettingsUpdate) =>
       propertySettingsApi.update(propertyId, body),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cwv-settings", propertyId] }),
   });
 
-  function toggle(field: keyof Omit<PropertySettingsResponse, "property_id">) {
+  const psiKeyMutation = useMutation({
+    mutationFn: (key: string) =>
+      propertySettingsApi.update(propertyId, { psi_api_key: key }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cwv-settings", propertyId] });
+      setPsiKey("");
+      setPsiKeySaved(true);
+      setTimeout(() => setPsiKeySaved(false), 2_500);
+    },
+  });
+
+  function toggle(field: keyof Omit<PropertySettingsResponse, "property_id" | "has_psi_api_key">) {
     if (!data) return;
     mutation.mutate({ [field]: !data[field] });
   }
@@ -1792,6 +1808,94 @@ function CWVSettingsCard({ propertyId }: { propertyId: number }) {
               }}
               className="w-20 rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-center text-sm text-white outline-none focus:border-brand-500"
             />
+          </div>
+
+          {/* PSI API key */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <KeyRound size={13} className="text-slate-500" />
+                <span className="text-xs font-medium text-slate-400">
+                  PageSpeed Insights API key
+                </span>
+                {settings.has_psi_api_key && (
+                  <span className="rounded-full bg-emerald-900/40 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
+                    Configured
+                  </span>
+                )}
+              </div>
+              {settings.has_psi_api_key && (
+                <button
+                  type="button"
+                  onClick={() => psiKeyMutation.mutate("")}
+                  disabled={psiKeyMutation.isPending}
+                  className="text-xs text-red-500 hover:text-red-400 transition disabled:opacity-50"
+                >
+                  {psiKeyMutation.isPending ? "Removing…" : "Remove key"}
+                </button>
+              )}
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (psiKey.trim()) psiKeyMutation.mutate(psiKey.trim());
+              }}
+              className="flex gap-2"
+            >
+              <div className="relative flex-1">
+                <input
+                  type={showPsiKey ? "text" : "password"}
+                  value={psiKey}
+                  onChange={(e) => setPsiKey(e.target.value)}
+                  placeholder={
+                    settings.has_psi_api_key
+                      ? "Enter new key to replace…"
+                      : "AIzaSy…"
+                  }
+                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 pr-14 font-mono text-sm text-white placeholder-slate-600 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/30"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPsiKey((v) => !v)}
+                  className="absolute inset-y-0 right-3 text-xs text-slate-600 hover:text-slate-300 transition"
+                >
+                  {showPsiKey ? "Hide" : "Show"}
+                </button>
+              </div>
+              <button
+                type="submit"
+                disabled={!psiKey.trim() || psiKeyMutation.isPending}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {psiKeyMutation.isPending ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : psiKeySaved ? (
+                  <Check size={13} />
+                ) : (
+                  <Save size={13} />
+                )}
+                {psiKeySaved ? "Saved" : settings.has_psi_api_key ? "Replace" : "Save key"}
+              </button>
+            </form>
+            {psiKeyMutation.isError && (
+              <p className="text-xs text-red-400">
+                {(psiKeyMutation.error as Error).message}
+              </p>
+            )}
+            <p className="text-xs text-slate-600">
+              Get a free API key from{" "}
+              <a
+                href="https://console.cloud.google.com/apis/credentials"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-brand-500 hover:text-brand-400"
+              >
+                Google Cloud Console
+              </a>{" "}
+              — enable the PageSpeed Insights API, create an API key, restrict it
+              to that API. Without a key, PSI audits still work but at a lower
+              quota.
+            </p>
           </div>
 
           <div className="border-t border-slate-800 pt-4">

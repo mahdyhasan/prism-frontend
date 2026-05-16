@@ -179,6 +179,7 @@ class PropertySettingsResponse(BaseModel):
     cwv_mobile_enabled: bool
     cwv_desktop_enabled: bool
     allow_destructive_actions: bool
+    has_psi_api_key: bool = False
 
 
 class PropertySettingsUpdate(BaseModel):
@@ -187,6 +188,7 @@ class PropertySettingsUpdate(BaseModel):
     cwv_mobile_enabled: bool | None = None
     cwv_desktop_enabled: bool | None = None
     allow_destructive_actions: bool | None = None
+    psi_api_key: str | None = None  # plaintext — encrypted before storage; empty string = clear
 
 
 @router.get("/settings", response_model=PropertySettingsResponse)
@@ -207,6 +209,7 @@ async def get_settings(
             cwv_mobile_enabled=True,
             cwv_desktop_enabled=True,
             allow_destructive_actions=False,
+            has_psi_api_key=False,
         )
     return PropertySettingsResponse(
         property_id=row.property_id,
@@ -215,6 +218,7 @@ async def get_settings(
         cwv_mobile_enabled=row.cwv_mobile_enabled,
         cwv_desktop_enabled=row.cwv_desktop_enabled,
         allow_destructive_actions=row.allow_destructive_actions,
+        has_psi_api_key=bool(row.psi_api_key_encrypted),
     )
 
 
@@ -243,6 +247,16 @@ async def update_settings(
     if body.allow_destructive_actions is not None:
         row.allow_destructive_actions = body.allow_destructive_actions
 
+    if body.psi_api_key is not None:
+        from prism.config import get_settings as _get_settings
+        from prism.core.security import encrypt_token
+        stripped = body.psi_api_key.strip()
+        if stripped:
+            row.psi_api_key_encrypted = encrypt_token(stripped, _get_settings().prism_token_encryption_key)
+        else:
+            # Empty string → clear the stored key
+            row.psi_api_key_encrypted = None
+
     await db.commit()
     await db.refresh(row)
     return PropertySettingsResponse(
@@ -252,4 +266,5 @@ async def update_settings(
         cwv_mobile_enabled=row.cwv_mobile_enabled,
         cwv_desktop_enabled=row.cwv_desktop_enabled,
         allow_destructive_actions=row.allow_destructive_actions,
+        has_psi_api_key=bool(row.psi_api_key_encrypted),
     )
