@@ -13,7 +13,7 @@ from anthropic import AsyncAnthropic
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: F401
 
-from prism.ai.client import NARRATIVE_MODEL
+from prism.services.ai.client import NARRATIVE_MODEL
 from prism.config import get_settings
 from prism.core.logging import logger
 from prism.db.session import get_session_factory
