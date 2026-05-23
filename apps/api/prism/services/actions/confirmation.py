@@ -34,6 +34,11 @@ _TERMINAL_STATUSES = frozenset({"succeeded", "failed", "cancelled", "expired"})
 
 def generate_confirmation_token(action_id: int, secret: str) -> str:
     """Generate a HMAC-SHA256 confirmation token for an action."""
+    if not secret.strip():
+        raise RuntimeError(
+            "ACTIONS_HMAC_SECRET is not configured. "
+            "Set it in apps/api/.env before using action confirmations."
+        )
     msg = f"confirm:{action_id}".encode()
     return hmac.new(secret.encode(), msg, hashlib.sha256).hexdigest()
 

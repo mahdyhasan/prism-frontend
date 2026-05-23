@@ -27,6 +27,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             profiles_sample_rate=0.0,
         )
         logger.info("Sentry initialised", env=settings.prism_env)
+    if not settings.actions_hmac_secret.strip():
+        logger.warning(
+            "ACTIONS_HMAC_SECRET is not set — action confirmations will fail at runtime. "
+            "Set this variable before using the Actions feature."
+        )
+    elif settings.actions_hmac_secret == "change-me-in-prod":
+        logger.warning(
+            "ACTIONS_HMAC_SECRET is set to the insecure default 'change-me-in-prod'. "
+            "Generate a strong random secret and set it in your environment."
+        )
     logger.info("PRISM API starting", env=settings.prism_env)
     yield
     logger.info("PRISM API shutting down")

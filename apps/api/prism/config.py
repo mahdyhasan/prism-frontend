@@ -46,7 +46,7 @@ class Settings(BaseSettings):
 
     # Actions HMAC
     actions_hmac_secret: str = Field(
-        default="change-me-in-prod",
+        default="",
         description="HMAC-SHA256 secret for action confirmation tokens",
     )
 
