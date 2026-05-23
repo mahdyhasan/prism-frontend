@@ -51,10 +51,14 @@ def create_celery_app() -> Celery:
                 "task": "prism.workers.tasks.generate_daily_brief_all",
                 "schedule": crontab(hour=7, minute=0),
             },
-            # Nightly insights job — kept for backward compatibility
+            # nightly-insights runs at 06:30, NOT 06:00, so precompute_cross_source_views (06:00)
+            # has time to complete before detectors read xs_page_daily.
+            # NOTE: this time-based offset is not enforced — it is a scheduling convention.
+            # TODO: replace with a Celery chain (precompute.si() | insights.si()) once the
+            #       P99 runtime of precompute_cross_source_views is measured on a real fleet.
             "nightly-insights": {
                 "task": "prism.workers.tasks.run_nightly_insights",
-                "schedule": crontab(hour=6, minute=0),
+                "schedule": crontab(hour=6, minute=30),
             },
             # Pinned question re-run sweep — 08:00 UTC (after briefs, after materialization)
             "rerun-pinned-questions": {

@@ -51,8 +51,26 @@ def sync_ga4_all_properties() -> dict:
             )
             properties = result.scalars().all()
 
+        # task_acks_late=True means tasks are re-queued if the worker crashes mid-execution.
+        # Without this check, a crash after creating N SyncJob rows but before finishing
+        # would produce duplicate rows on retry. The check makes the loop idempotent.
+        today = date.today()
         dispatched = []
         for prop in properties:
+            # Idempotency: skip dispatch if a pending/running job already exists for this property+date+source.
+            async with factory() as db:
+                existing = await db.execute(
+                    select(SyncJob).where(
+                        SyncJob.property_id == prop.id,
+                        SyncJob.source == "ga4",
+                        SyncJob.date == today,
+                        SyncJob.status.in_(["pending", "running"]),
+                    )
+                )
+                if existing.scalar_one_or_none():
+                    logger.info("sync_job_already_exists", property_id=prop.id, date=today, source="ga4")
+                    continue
+
             job = SyncJob(
                 property_id=prop.id,
                 source="ga4",
