@@ -30,6 +30,13 @@ from prism.ai.tools.cwv_tools import (
 from prism.core.middleware import CurrentUser
 from prism.db.models.cwv import PropertySettings
 from prism.db.session import get_db_session
+from prism.services import properties as svc
+
+# Security: all endpoints verify property ownership via get_property() before data access.
+# Pattern matches properties.py, chat.py, cwv_tools.py — enforced at route layer, not service layer.
+# Rationale: route-layer enforcement is the correct boundary because the service functions
+# are also called from Celery tasks (which run as the system, not a user) — adding the check
+# at service layer would break background jobs.
 
 router = APIRouter(prefix="/properties/{property_id}/cwv", tags=["cwv"])
 
@@ -81,6 +88,7 @@ async def get_origin(
     strategy: str = Query("mobile", pattern="^(mobile|desktop)$"),
     db: AsyncSession = Depends(get_db_session),
 ) -> OriginCWVResponse:
+    await svc.get_property(db, property_id, current_user)
     result = await get_origin_cwv(
         GetOriginCWVInput(property_id=property_id, strategy=strategy),  # type: ignore[arg-type]
         db,
@@ -104,6 +112,7 @@ async def scan_problems(
     limit: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_db_session),
 ) -> CWVScanResponse:
+    await svc.get_property(db, property_id, current_user)
     result = await scan_cwv_problem_pages(
         ScanCWVProblemsInput(property_id=property_id, strategy=strategy, limit=limit),  # type: ignore[arg-type]
         db,
@@ -132,6 +141,7 @@ async def mobile_desktop(
     limit: int = Query(20, ge=1, le=50),
     db: AsyncSession = Depends(get_db_session),
 ) -> CWVMobileDesktopResponse:
+    await svc.get_property(db, property_id, current_user)
     result = await cwv_mobile_desktop_compare(
         CWVMobileDesktopInput(property_id=property_id, limit=limit),
         db,
@@ -163,6 +173,7 @@ async def get_page(
     strategy: str = Query("mobile", pattern="^(mobile|desktop)$"),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
+    await svc.get_property(db, property_id, current_user)
     return await get_page_cwv(
         GetPageCWVInput(property_id=property_id, url=url, strategy=strategy),  # type: ignore[arg-type]
         db,
@@ -197,6 +208,7 @@ async def get_settings(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db_session),
 ) -> PropertySettingsResponse:
+    await svc.get_property(db, property_id, current_user)
     row = (await db.execute(
         select(PropertySettings).where(PropertySettings.property_id == property_id)
     )).scalar_one_or_none()
@@ -229,6 +241,7 @@ async def update_settings(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db_session),
 ) -> PropertySettingsResponse:
+    await svc.get_property(db, property_id, current_user)
     row = (await db.execute(
         select(PropertySettings).where(PropertySettings.property_id == property_id)
     )).scalar_one_or_none()
