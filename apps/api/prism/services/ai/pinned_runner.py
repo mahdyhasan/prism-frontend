@@ -16,7 +16,7 @@ from anthropic import AsyncAnthropic
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from prism.ai.client import NARRATIVE_MODEL
+from prism.services.ai.client import NARRATIVE_MODEL
 from prism.ai.tools import TOOL_DEFINITIONS, dispatch_tool
 from prism.config import get_settings
 from prism.core.logging import logger

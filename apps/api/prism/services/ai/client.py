@@ -6,7 +6,6 @@ caller passes precomputed values in the prompt.
 """
 from __future__ import annotations
 
-from functools import lru_cache
 from time import perf_counter
 
 from anthropic import AsyncAnthropic
@@ -22,13 +21,28 @@ NARRATIVE_MODEL = "claude-sonnet-4-7-20251222"
 CHEAP_MODEL = "claude-haiku-4-5-20251001"
 
 
-@lru_cache
+_claude_client: AsyncAnthropic | None = None
+
+
 def get_claude_client() -> AsyncAnthropic:
-    settings = get_settings()
-    if not settings.anthropic_api_key:
-        msg = "ANTHROPIC_API_KEY is not configured."
-        raise RuntimeError(msg)
-    return AsyncAnthropic(api_key=settings.anthropic_api_key)
+    global _claude_client
+    if _claude_client is None:
+        settings = get_settings()
+        if not settings.anthropic_api_key:
+            msg = "ANTHROPIC_API_KEY is not configured."
+            raise RuntimeError(msg)
+        _claude_client = AsyncAnthropic(
+            api_key=settings.anthropic_api_key,
+            timeout=120.0,
+            max_retries=1,
+        )
+    return _claude_client
+
+
+def _reset_claude_client() -> None:
+    """Reset the cached client. Call in tests that need a fresh instance."""
+    global _claude_client
+    _claude_client = None
 
 
 async def call_claude(

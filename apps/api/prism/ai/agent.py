@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from time import perf_counter
 from typing import AsyncGenerator
 
-from anthropic import AsyncAnthropic
+import anthropic
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: F401 — kept for type annotation clarity
 
-from prism.ai.client import NARRATIVE_MODEL
+from prism.services.ai.client import NARRATIVE_MODEL, get_claude_client
 from prism.ai.tools import TOOL_DEFINITIONS, dispatch_tool
 from prism.core.logging import logger
+from prism.db.models.insight import ClaudeCallLog
+from prism.db.models.property import Property
 from prism.db.session import get_session_factory
 
 MAX_TOOL_CALLS = 10
@@ -68,12 +72,10 @@ async def run_agent_streaming(
     - done:        {"type": "done",        "tool_calls_count": N}
     - error:       {"type": "error",       "message": "..."}
     """
-    from prism.config import get_settings
     from prism.ai.tools.memory_tools import recall_memory
     from prism.ai.tools.schemas import RecallMemoryInput
 
-    settings = get_settings()
-    client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+    client = get_claude_client()
 
     factory = get_session_factory()
     tool_calls_count = 0
@@ -104,15 +106,50 @@ async def run_agent_streaming(
 
         # 3. Agentic loop — single DB session for all tool calls in this request
         async with factory() as db:
+            # Resolve tenant_id for ClaudeCallLog (required field)
+            tenant_id: int | None = None
+            try:
+                result = await db.execute(select(Property).where(Property.id == property_id))
+                prop = result.scalar_one_or_none()
+                if prop is not None:
+                    tenant_id = prop.tenant_id
+            except Exception:
+                logger.warning("agent_tenant_id_lookup_failed", property_id=property_id)
+
             while tool_calls_count < MAX_TOOL_CALLS:
-                response = await client.messages.create(
-                    model=NARRATIVE_MODEL,
-                    max_tokens=4096,
-                    system=system_prompt,
-                    tools=TOOL_DEFINITIONS,
-                    messages=messages,
-                    stream=False,
-                )
+                _t0 = perf_counter()
+                try:
+                    response = await client.messages.create(
+                        model=NARRATIVE_MODEL,
+                        max_tokens=4096,
+                        system=system_prompt,
+                        tools=TOOL_DEFINITIONS,
+                        messages=messages,
+                        stream=False,
+                    )
+                except anthropic.APITimeoutError:
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'AI response timed out. Please try again.'})}\n\n"
+                    return
+
+                if tenant_id is not None:
+                    try:
+                        db.add(ClaudeCallLog(
+                            tenant_id=tenant_id,
+                            property_id=property_id,
+                            purpose="chat_agent",
+                            model=NARRATIVE_MODEL,
+                            input_tokens=response.usage.input_tokens,
+                            output_tokens=response.usage.output_tokens,
+                            latency_ms=int((perf_counter() - _t0) * 1000),
+                            status="success",
+                        ))
+                        await db.flush()
+                    except Exception as log_exc:
+                        logger.error(
+                            "Failed to persist ClaudeCallLog for chat_agent",
+                            property_id=property_id,
+                            error=f"{type(log_exc).__name__}: {log_exc}",
+                        )
 
                 # Append assistant turn so future calls have full context
                 messages.append({"role": "assistant", "content": response.content})
@@ -181,12 +218,38 @@ async def run_agent_streaming(
                                 "Please summarise your findings with the data you have gathered so far."
                             ),
                         })
-                        final = await client.messages.create(
-                            model=NARRATIVE_MODEL,
-                            max_tokens=4096,
-                            system=system_prompt,
-                            messages=messages,
-                        )
+                        _t0 = perf_counter()
+                        try:
+                            final = await client.messages.create(
+                                model=NARRATIVE_MODEL,
+                                max_tokens=4096,
+                                system=system_prompt,
+                                messages=messages,
+                            )
+                        except anthropic.APITimeoutError:
+                            yield f"data: {json.dumps({'type': 'error', 'message': 'AI response timed out. Please try again.'})}\n\n"
+                            return
+
+                        if tenant_id is not None:
+                            try:
+                                db.add(ClaudeCallLog(
+                                    tenant_id=tenant_id,
+                                    property_id=property_id,
+                                    purpose="chat_agent",
+                                    model=NARRATIVE_MODEL,
+                                    input_tokens=final.usage.input_tokens,
+                                    output_tokens=final.usage.output_tokens,
+                                    latency_ms=int((perf_counter() - _t0) * 1000),
+                                    status="success",
+                                ))
+                                await db.flush()
+                            except Exception as log_exc:
+                                logger.error(
+                                    "Failed to persist ClaudeCallLog for chat_agent summary",
+                                    property_id=property_id,
+                                    error=f"{type(log_exc).__name__}: {log_exc}",
+                                )
+
                         for block in final.content:
                             if hasattr(block, "text"):
                                 text = block.text
