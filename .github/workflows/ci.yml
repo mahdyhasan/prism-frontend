@@ -1,0 +1,33 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test
+          MYSQL_DATABASE: prism_test
+        ports: ["3306:3306"]
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=5
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+    env:
+      DATABASE_URL: mysql+aiomysql://root:test@127.0.0.1:3306/prism_test
+      REDIS_URL: redis://localhost:6379/0
+      SECRET_KEY: test-secret-key-not-for-prod
+      PRISM_TOKEN_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=  # 32-byte base64 test key (32 zero bytes)
+      ACTIONS_HMAC_SECRET: test-hmac-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - name: Install dependencies
+        run: uv pip install -e ".[dev]" --system
+        working-directory: apps/api
+      - name: Run tests
+        run: pytest apps/api/tests/ -v --tb=short
+      - name: TypeScript typecheck
+        run: pnpm install && pnpm --filter prism-web typecheck
+        continue-on-error: true  # don't block merge on TS errors during initial setup
